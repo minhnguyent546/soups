@@ -1,0 +1,18 @@
+# python stuff
+__pycache__
+.ipynb_checkpoints
+
+# virtual environments
+.venv
+.venv.*
+.venv-*
+
+# local stuff
+_*
+!__init__.py
+
+# datasets
+/data
+
+# other
+/wandb
