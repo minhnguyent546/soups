@@ -1,4 +1,5 @@
 import argparse
+import os
 import random
 
 import timm
@@ -10,7 +11,6 @@ import wandb
 from loguru import logger
 from sklearn.metrics import precision_recall_fscore_support
 from timm.data.config import resolve_data_config
-from timm.data.dataset_factory import create_dataset
 from timm.data.transforms_factory import create_transform
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
@@ -85,26 +85,17 @@ def train_model(args: argparse.Namespace) -> None:
         raise ValueError(f'Unsupported model: {args.model}')
 
     # load datasets from the specified directory
-    train_dataset = create_dataset(
-        name='42',
-        root=args.dataset_dir,
-        split='train',
+    train_dataset = torchvision.datasets.ImageFolder(
+        root=os.path.join(args.dataset_dir, 'train'),
         transform=train_transforms,
-        is_training=True,
     )
-    test_dataset = create_dataset(
-        name='42',
-        root=args.dataset_dir,
-        split='test',
+    test_dataset = torchvision.datasets.ImageFolder(
+        root=os.path.join(args.dataset_dir, 'test'),
         transform=eval_transforms,
-        is_training=False,
     )
-    val_dataset = create_dataset(
-        name='42',
-        root=args.dataset_dir,
-        split='val',
+    val_dataset = torchvision.datasets.ImageFolder(
+        root=os.path.join(args.dataset_dir, 'val'),
         transform=eval_transforms,
-        is_training=False,
     )
     logger.info(
         f'Train_size = {len(train_dataset)}, '
