@@ -44,6 +44,12 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         default=1.0e-4,
     )
     group.add_argument(
+        '--min_lr',
+        type=float,
+        help='Learning rate',
+        default=1.0e-6,
+    )
+    group.add_argument(
         '--num_epochs',
         type=int,
         help='Number of training epochs',
@@ -60,6 +66,18 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         type=float,
         help='Label smoothing value',
         default=0.0,
+    )
+    group.add_argument(
+        '--scheduler_T_0',
+        type=int,
+        help='Number of iterations for the first restart in CosineAnnealingWarmRestarts',
+        default=10,
+    )
+    group.add_argument(
+        '--scheduler_T_mult',
+        type=int,
+        help='Multiplier for the period of the cosine annealing scheduler',
+        default=1,
     )
     group.add_argument(
         '--use_mixup_cutmix',

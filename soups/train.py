@@ -11,6 +11,7 @@ import wandb
 from loguru import logger
 from sklearn.metrics import precision_recall_fscore_support
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 from torch.utils.data import default_collate
 from tqdm.autonotebook import tqdm
@@ -29,12 +30,18 @@ def train_model(args: argparse.Namespace) -> None:
         torchvision.transforms.Resize(size=(224, 224)),
         torchvision.transforms.RandomHorizontalFlip(p=0.5),
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        torchvision.transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+        ),
     ])
     eval_transforms = torchvision.transforms.Compose([
         torchvision.transforms.Resize(size=(224, 224)),
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        torchvision.transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+        ),
     ])
     train_dataset = torchvision.datasets.ImageFolder(
         root=os.path.join(args.dataset_dir, 'train'),
@@ -65,6 +72,7 @@ def train_model(args: argparse.Namespace) -> None:
         cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
     else:
         cutmix_or_mixup = v2.Identity()
+
     def collate_fn(batch):
         return cutmix_or_mixup(*default_collate((batch)))
 
@@ -114,7 +122,11 @@ def train_model(args: argparse.Namespace) -> None:
             if model.classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
                 nn.init.zeros_(model.classifier.bias)
     elif args.model.startswith('coatnet'):
-        model = timm.create_model(args.model, pretrained=True, num_classes=num_classes)
+        model = timm.create_model(
+            args.model,
+            pretrained=True,
+            num_classes=num_classes,
+        )
         nn.init.xavier_uniform_(model.head.fc.weight)
         if model.head.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
             nn.init.zeros_(model.head.fc.bias)
@@ -138,17 +150,28 @@ def train_model(args: argparse.Namespace) -> None:
     logger.info(f'Using model: {args.model}')
     logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
 
-    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = AdamW(
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+    )
+    scheduler = CosineAnnealingWarmRestarts(
+        optimizer=optimizer,
+        T_0=args.scheduler_T_0,
+        T_mult=args.scheduler_T_mult,
+        eta_min=args.min_lr,
+    )
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f'Using device: {device}')
     model.to(device)
 
     global_step = 0
+    num_train_iters = len(train_data_loader)
     for epoch in range(args.num_epochs):
         model.train()
         train_iter = tqdm(train_data_loader, desc=f'Training epoch {epoch + 1}/{args.num_epochs}')
-        for images, labels in train_iter:
+        for i, (images, labels) in enumerate(train_iter):
             images = images.to(device)
             labels = labels.to(device)
 
@@ -160,9 +183,14 @@ def train_model(args: argparse.Namespace) -> None:
             optimizer.step()
 
             if wandb_run is not None:
-                wandb_run.log({
-                    'train/loss': loss.item(),
-                }, step=global_step)
+                log_data = {
+                    f'learning_rate/group_{group_id}': group_lr
+                    for group_id, group_lr in enumerate(scheduler.get_last_lr())
+                }
+                log_data['train/loss'] = loss.item()
+                wandb_run.log(log_data, step=global_step)
+
+            scheduler.step(epoch + i / num_train_iters)  # pyright: ignore[reportArgumentType]
 
             train_iter.set_postfix({
                 'loss': f'{loss:0.4f}'
