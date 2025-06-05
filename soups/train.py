@@ -10,8 +10,6 @@ import torchvision.transforms.v2 as v2
 import wandb
 from loguru import logger
 from sklearn.metrics import precision_recall_fscore_support
-from timm.data.config import resolve_data_config
-from timm.data.transforms_factory import create_transform
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from torch.utils.data import default_collate
@@ -26,65 +24,18 @@ def train_model(args: argparse.Namespace) -> None:
     torch.cuda.manual_seed_all(args.seed)
     logger.info(f'Seed: {args.seed}')
 
-    NUM_CLASSES = 17  # TODO: infer number of classes from train_dataset
-
-    if args.model == 'resnet50' or args.model == 'densenet121':
-        if args.model == 'resnet50':
-            model = torchvision.models.resnet50(
-                weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
-            )
-            model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
-            nn.init.xavier_uniform_(model.fc.weight)
-            if model.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-                nn.init.zeros_(model.fc.bias)
-        else:
-            model = torchvision.models.densenet121(
-                weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
-            )
-            model.classifier = nn.Linear(model.classifier.in_features, NUM_CLASSES)
-            nn.init.xavier_uniform_(model.classifier.weight)
-            if model.classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-                nn.init.zeros_(model.classifier.bias)
-
-        train_transforms = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(size=(224, 224)),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-        eval_transforms = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(size=(224, 224)),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-    elif args.model.startswith('coatnet'):
-        model = timm.create_model(args.model, pretrained=True, num_classes=NUM_CLASSES)
-        nn.init.xavier_uniform_(model.head.fc.weight)
-        if model.head.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-            nn.init.zeros_(model.head.fc.bias)
-
-        # TODO: consider changing it for fair comparison with other models
-        # use default transforms from coatnet model
-        data_config = resolve_data_config(model=model)
-        train_transforms = create_transform(**data_config, is_training=True)
-        eval_transforms = create_transform(**data_config, is_training=False)
-        # train_transforms = Compose(
-        #     RandomResizedCropAndInterpolation(size=(224, 224), scale=(0.08, 1.0), ratio=(0.75, 1.3333), interpolation=bicubic)
-        #     RandomHorizontalFlip(p=0.5)
-        #     ColorJitter(brightness=(0.6, 1.4), contrast=(0.6, 1.4), saturation=(0.6, 1.4), hue=None)
-        #     MaybeToTensor()
-        #     Normalize(mean=tensor([0.5000, 0.5000, 0.5000]), std=tensor([0.5000, 0.5000, 0.5000]))
-        # )
-        # eval_transforms = Compose(
-        #     Resize(size=235, interpolation=bicubic, max_size=None, antialias=True)
-        #     CenterCrop(size=(224, 224))
-        #     MaybeToTensor()
-        #     Normalize(mean=tensor([0.5000, 0.5000, 0.5000]), std=tensor([0.5000, 0.5000, 0.5000]))
-        # )
-    else:
-        raise ValueError(f'Unsupported model: {args.model}')
-
-    # load datasets from the specified directory
+    # loading dataset
+    train_transforms = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(size=(224, 224)),
+        torchvision.transforms.RandomHorizontalFlip(p=0.5),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    eval_transforms = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(size=(224, 224)),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
     train_dataset = torchvision.datasets.ImageFolder(
         root=os.path.join(args.dataset_dir, 'train'),
         transform=train_transforms,
@@ -97,8 +48,11 @@ def train_model(args: argparse.Namespace) -> None:
         root=os.path.join(args.dataset_dir, 'val'),
         transform=eval_transforms,
     )
+    num_classes = len(train_dataset.classes)
+
     logger.info(
-        f'Train_size = {len(train_dataset)}, '
+        f'num_classes = {num_classes}, '
+        f'train_size = {len(train_dataset)}, '
         f'test_size = {len(test_dataset)}, '
         f'val_size = {len(val_dataset)}'
     )
@@ -106,15 +60,15 @@ def train_model(args: argparse.Namespace) -> None:
     # CutMiX & MixUp
     if args.use_mixup_cutmix:
         logger.info('MixUp & CutMix enabled')
-        cutmix = v2.CutMix(alpha=1.0, num_classes=NUM_CLASSES)
-        mixup = v2.MixUp(alpha=1.0, num_classes=NUM_CLASSES)
+        cutmix = v2.CutMix(alpha=1.0, num_classes=num_classes)
+        mixup = v2.MixUp(alpha=1.0, num_classes=num_classes)
         cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
     else:
         cutmix_or_mixup = v2.Identity()
     def collate_fn(batch):
         return cutmix_or_mixup(*default_collate((batch)))
 
-    # create data loaders
+    # creating data loaders
     train_data_loader = DataLoader(
         train_dataset,
         batch_size=args.train_batch_size,
@@ -141,7 +95,33 @@ def train_model(args: argparse.Namespace) -> None:
         persistent_workers=True,
     )
 
-    # logging to wandb
+    # creating model
+    if args.model == 'resnet50' or args.model == 'densenet121':
+        if args.model == 'resnet50':
+            model = torchvision.models.resnet50(
+                weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
+            )
+            model.fc = nn.Linear(model.fc.in_features, num_classes)
+            nn.init.xavier_uniform_(model.fc.weight)
+            if model.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+                nn.init.zeros_(model.fc.bias)
+        else:
+            model = torchvision.models.densenet121(
+                weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
+            )
+            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+            nn.init.xavier_uniform_(model.classifier.weight)
+            if model.classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+                nn.init.zeros_(model.classifier.bias)
+    elif args.model.startswith('coatnet'):
+        model = timm.create_model(args.model, pretrained=True, num_classes=num_classes)
+        nn.init.xavier_uniform_(model.head.fc.weight)
+        if model.head.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+            nn.init.zeros_(model.head.fc.bias)
+    else:
+        raise ValueError(f'Unsupported model: {args.model}')
+
+    # setting up logging with wandb
     wandb_run = None
     if args.wandb_logging:
         wandb_run = wandb.init(
