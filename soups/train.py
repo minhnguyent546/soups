@@ -1,4 +1,5 @@
 import argparse
+import random
 
 import timm
 import torch
@@ -20,7 +21,10 @@ import soups.opts as opts
 
 
 def train_model(args: argparse.Namespace) -> None:
-    # TODO: set random seed
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    logger.info(f'Seed: {args.seed}')
 
     NUM_CLASSES = 17  # TODO: infer number of classes from train_dataset
 
@@ -30,11 +34,17 @@ def train_model(args: argparse.Namespace) -> None:
                 weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
             )
             model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
+            nn.init.xavier_uniform_(model.fc.weight)
+            if model.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+                nn.init.zeros_(model.fc.bias)
         else:
             model = torchvision.models.densenet121(
                 weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
             )
             model.classifier = nn.Linear(model.classifier.in_features, NUM_CLASSES)
+            nn.init.xavier_uniform_(model.classifier.weight)
+            if model.classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+                nn.init.zeros_(model.classifier.bias)
 
         train_transforms = torchvision.transforms.Compose([
             torchvision.transforms.Resize(size=(224, 224)),
@@ -49,8 +59,12 @@ def train_model(args: argparse.Namespace) -> None:
         ])
     elif args.model.startswith('coatnet'):
         model = timm.create_model(args.model, pretrained=True, num_classes=NUM_CLASSES)
-        # use default transforms from coatnet model
+        nn.init.xavier_uniform_(model.head.fc.weight)
+        if model.head.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+            nn.init.zeros_(model.head.fc.bias)
+
         # TODO: consider changing it for fair comparison with other models
+        # use default transforms from coatnet model
         data_config = resolve_data_config(model=model)
         train_transforms = create_transform(**data_config, is_training=True)
         eval_transforms = create_transform(**data_config, is_training=False)
