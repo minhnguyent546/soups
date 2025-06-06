@@ -27,11 +27,12 @@ def train_model(args: argparse.Namespace) -> None:
     set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
-    checkpoint_dir = os.path.join(
-        args.checkpoints_dir,
-        datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
-    )
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    if not args.run_test_only:
+        checkpoint_dir = os.path.join(
+            args.checkpoints_dir,
+            datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
+        )
+        os.makedirs(checkpoint_dir, exist_ok=True)
 
     # training device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
