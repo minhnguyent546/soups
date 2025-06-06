@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+from typing import Any, TypedDict
 
 import timm
 import torch
@@ -19,6 +20,7 @@ from tqdm.autonotebook import tqdm
 from wandb.sdk.wandb_run import Run as WandbRun
 
 import soups.opts as opts
+from soups.utils.metric import AverageMeter
 
 
 def train_model(args: argparse.Namespace) -> None:
@@ -177,6 +179,7 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     global_step = 0
+    training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
     num_train_iters = len(train_data_loader)
     for epoch in range(args.num_epochs):
         model.train()
@@ -203,47 +206,63 @@ def train_model(args: argparse.Namespace) -> None:
 
             scheduler.step(epoch + i / num_train_iters)  # pyright: ignore[reportArgumentType]
 
+            training_loss.update(loss.item(), labels.shape[0])
             train_iter.set_postfix({
                 'loss': f'{loss:0.4f}'
             })
             global_step += 1
 
         # validation
-        eval_model(
+        val_results = eval_model(
             model=model_ema.module,
             eval_data_loader=val_data_loader,
             device=device,
             criterion=criterion,
-            epoch=epoch,
-            global_step=global_step,
-            wandb_run=wandb_run,
         )
+        print(
+            f'Epoch {epoch + 1}: val_loss {val_results["loss"]:0.4f} | '
+            f'val_acc {val_results["accuracy"]:0.4f} | '
+            f'val_precision {val_results["precision"]:0.4f} | '
+            f'val_recall {val_results["recall"]:0.4f} | '
+            f'val_f1 {val_results["f1"]:0.4f}'
+        )
+        if wandb_run is not None:
+            wandb_run.log({
+                'val/loss': val_results["loss"],
+                'val/accuracy': val_results['accuracy'],
+                'val/precision': val_results['precision'],
+                'val/recall': val_results['recall'],
+                'val/f1': val_results['f1'],
+            }, step=global_step)
 
     # TODO: save model checkpoints
     # TODO: test model
     # TODO: acc with mixup&cutmix
     # TODO: acc@k
 
+class EvalResults(TypedDict):
+    loss: float
+    accuracy: float
+    precision: float
+    recall: float
+    f1: float
+
 def eval_model(
     model: nn.Module,
     eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
     device: torch.device,
     criterion,
-    epoch: int,
-    global_step: int,
-    wandb_run: WandbRun | None = None,
-) -> None:
+) -> EvalResults:
     model_mode_before = model.training
     model.eval()
 
-    val_iter = tqdm(eval_data_loader, desc=f'Validating epoch {epoch + 1}')
-    val_loss = 0.0
-    num_corrects = 0
-    num_totals = 0
+    eval_iter = tqdm(eval_data_loader, desc=f'Evaluating model')
+    eval_loss = AverageMeter('eval_loss', fmt=':0.4f')
+    eval_accuracy = AverageMeter('eval_accuracy', fmt=':0.4f')
     all_preds = []
     all_labels = []
     with torch.no_grad():
-        for images, labels in val_iter:
+        for images, labels in eval_iter:
             images = images.to(device)
             labels = labels.to(device)
 
@@ -251,40 +270,35 @@ def eval_model(
             preds = outputs.argmax(dim=1)
             loss = criterion(outputs, labels)
 
-            num_totals += labels.shape[0]
-            num_corrects += (preds == labels).sum().item()
             all_preds.extend(preds.detach().cpu().numpy())
             all_labels.extend(labels.detach().cpu().numpy())
-            val_loss += loss.item()
-            val_iter.set_postfix({
+            eval_loss.update(loss.item(), labels.shape[0])
+
+            num_corrects = (preds == labels).sum().item()
+            cur_accuracy = num_corrects / labels.shape[0]
+            eval_accuracy.update(cur_accuracy, labels.shape[0])
+
+            eval_iter.set_postfix({
                 'loss': f'{loss:0.4f}',
             })
 
-        val_loss /= len(val_iter)
-        val_acc = num_corrects / num_totals
-        val_precision, val_recall, val_f1, _ = precision_recall_fscore_support(
-            all_labels,
-            all_preds,
-            average='macro',
-            zero_division=0,
-        )
-        print(
-            f'Epoch {epoch + 1}: val_loss {val_loss:0.4f} | '
-            f'val_acc {val_acc:0.4f} | '
-            f'val_precision {val_precision:0.4f} | '
-            f'val_recall {val_recall:0.4f} | '
-            f'val_f1 {val_f1:0.4f}'
-        )
-        if wandb_run is not None:
-            wandb_run.log({
-                'val/loss': val_loss,
-                'val/accuracy': val_acc,
-                'val/precision': val_precision,
-                'val/recall': val_recall,
-                'val/f1': val_f1,
-            }, step=global_step)
-
     model.train(model_mode_before)
+
+    eval_precision, eval_recall, eval_f1, _ = precision_recall_fscore_support(
+        all_labels,
+        all_preds,
+        average='macro',
+        zero_division=0,
+    )
+
+    return {
+        'loss': eval_loss.avg,
+        'accuracy': eval_accuracy.avg,
+        'precision': eval_precision,
+        'recall': eval_recall,
+        'f1': eval_f1,
+    }
+
 
 def main():
     parser = argparse.ArgumentParser(
