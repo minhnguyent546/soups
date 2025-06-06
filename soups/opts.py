@@ -101,6 +101,11 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
 
     # EMA
     group.add_argument(
+        '--use_ema',
+        action='store_true',
+        help='Whether to use Exponential Moving Average (EMA) for the model',
+    )
+    group.add_argument(
         '--model_ema_decay',
         type=float,
         help='Decay factor for Model EMA',

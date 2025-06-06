@@ -189,12 +189,14 @@ def train_model(args: argparse.Namespace) -> None:
         )
         return
 
-    model_ema = ModelEmaV3(
-        model=model,
-        device=device,
-        decay=args.model_ema_decay,
-        use_warmup=args.model_ema_warmup,
-    )
+    model_ema = None
+    if args.use_ema:
+        model_ema = ModelEmaV3(
+            model=model,
+            device=device,
+            decay=args.model_ema_decay,
+            use_warmup=args.model_ema_warmup,
+        )
 
     global_step = 0
     training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
@@ -212,7 +214,8 @@ def train_model(args: argparse.Namespace) -> None:
             loss.backward()
             optimizer.step()
 
-            model_ema.update(model)
+            if model_ema is not None:
+                model_ema.update(model)
 
             if wandb_run is not None:
                 log_data = {
@@ -232,7 +235,7 @@ def train_model(args: argparse.Namespace) -> None:
 
         # validation
         val_results = eval_model(
-            model=model_ema.module,
+            model=model_ema.module if model_ema is not None else model,
             eval_data_loader=val_data_loader,
             device=device,
             criterion=criterion,
