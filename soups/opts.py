@@ -13,7 +13,7 @@ def add_general_opts(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         '--model',
         type=str,
-        help='Name of the model to use (e.g., resnet50, densenet121, coatnet_0_rw_224.sw_in1k)',
+        help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
         default='coatnet_0_rw_224.sw_in1k',
     )
     group.add_argument(
@@ -21,6 +21,12 @@ def add_general_opts(parser: argparse.ArgumentParser) -> None:
         type=str,
         help='Path to the dataset',
         default='./data/vietnamese_cultural_dataset',
+    )
+    group.add_argument(
+        '--image_size',
+        type=int,
+        help='Image size for the model',
+        default=224,
     )
 
 def add_training_opts(parser: argparse.ArgumentParser) -> None:
@@ -72,7 +78,7 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         '--num_workers',
         type=int,
-        default=os.cpu_count(),
+        default=min(os.cpu_count() or 1, 16),  # too large can cause insufficient shared memory
         help='Number of workers for data loading',
     )
 
@@ -95,19 +101,19 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         '--min_lr',
         type=float,
         help='Learning rate',
-        default=1.0e-6,
+        default=0.0,
     )
     group.add_argument(
         '--scheduler_T_0',
         type=int,
         help='Number of iterations for the first restart in CosineAnnealingWarmRestarts',
-        default=5,
+        default=10,
     )
     group.add_argument(
         '--scheduler_T_mult',
         type=int,
         help='Multiplier for the period of the cosine annealing scheduler',
-        default=1,
+        default=3,
     )
 
     # EMA

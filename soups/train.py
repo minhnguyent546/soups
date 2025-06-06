@@ -38,8 +38,9 @@ def train_model(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # loading dataset
+    image_size = args.image_size
     train_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(224, 224)),
+        torchvision.transforms.Resize(size=(image_size, image_size)),
         torchvision.transforms.RandomHorizontalFlip(p=0.5),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(
@@ -48,7 +49,7 @@ def train_model(args: argparse.Namespace) -> None:
         ),
     ])
     eval_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(224, 224)),
+        torchvision.transforms.Resize(size=(image_size, image_size)),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
@@ -133,9 +134,9 @@ def train_model(args: argparse.Namespace) -> None:
             nn.init.xavier_uniform_(model.classifier.weight)
             if model.classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
                 nn.init.zeros_(model.classifier.bias)
-    elif args.model.startswith('coatnet'):
+    elif args.model.startswith('timm/'):
         model = timm.create_model(
-            args.model,
+            args.model[5:],
             pretrained=True,
             num_classes=num_classes,
         )
@@ -282,6 +283,8 @@ def train_model(args: argparse.Namespace) -> None:
             'global_step': global_step,
         }, checkpoint_path)
 
+    # TODO: mixed precision training
+    # TODO: using gradient accumulation
     # TODO: acc with mixup&cutmix
     # TODO: acc@k
 
