@@ -1,6 +1,5 @@
 import argparse
 import os
-import random
 from datetime import datetime
 from typing import TypedDict
 
@@ -20,14 +19,12 @@ from torch.utils.data import default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.opts as opts
+from soups.utils import save_metadata_to_checkpoint, set_seed
 from soups.utils.metric import AverageMeter
-from soups.utils import save_metadata_to_checkpoint
 
 
 def train_model(args: argparse.Namespace) -> None:
-    random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
+    set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
     checkpoint_dir = os.path.join(
@@ -271,6 +268,7 @@ def train_model(args: argparse.Namespace) -> None:
                 'val/precision': val_results['precision'],
                 'val/recall': val_results['recall'],
                 'val/f1': val_results['f1'],
+                'train/epoch_loss': training_loss.avg,
             }, step=global_step)
 
         # saving checkpoint
@@ -349,7 +347,7 @@ def eval_model(
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Train a model using timm',
+        description='Training model',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     opts.add_general_opts(parser)

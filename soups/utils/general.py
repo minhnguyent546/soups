@@ -1,7 +1,10 @@
-import os
-import yaml
 import argparse
+import os
+import random
+import yaml
 
+import numpy as np
+import torch
 from wandb.sdk.wandb_run import Run as WandbRun
 
 
@@ -27,3 +30,9 @@ def save_metadata_to_checkpoint(
     metadata_path = os.path.join(checkpoint_dir, 'metadata.yml')
     with open(metadata_path, 'w') as f:
         yaml.dump(metadata, f, default_flow_style=False)
+
+def set_seed(seed: int = 42) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
