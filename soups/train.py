@@ -171,6 +171,24 @@ def train_model(args: argparse.Namespace) -> None:
     )
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
     model.to(device)
+
+    if args.run_test_only:
+        test_results = eval_model(
+            model=model,
+            eval_data_loader=test_data_loader,
+            device=device,
+            criterion=criterion,
+        )
+        print(
+            '** Test results **\n'
+            f'  Loss: {test_results["loss"]:0.4f}\n'
+            f'  Accuracy: {test_results["accuracy"]:0.4f}\n'
+            f'  Precision: {test_results["precision"]:0.4f}\n'
+            f'  Recall: {test_results["recall"]:0.4f}\n'
+            f'  F1: {test_results["f1"]:0.4f}\n'
+        )
+        return
+
     model_ema = ModelEmaV3(
         model=model,
         device=device,

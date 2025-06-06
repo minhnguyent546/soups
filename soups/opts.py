@@ -26,6 +26,13 @@ def add_general_opts(parser: argparse.ArgumentParser) -> None:
 def add_training_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Training')
 
+    # test only mode
+    group.add_argument(
+        '--run_test_only',
+        action='store_true',
+        help='Run testing only',
+    )
+
     # basic stuff
     group.add_argument(
         '--train_batch_size',
