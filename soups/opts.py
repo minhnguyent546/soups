@@ -25,6 +25,8 @@ def add_general_opts(parser: argparse.ArgumentParser) -> None:
 
 def add_training_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Training')
+
+    # basic stuff
     group.add_argument(
         '--train_batch_size',
         type=int,
@@ -38,28 +40,10 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         default=32,
     )
     group.add_argument(
-        '--lr',
-        type=float,
-        help='Learning rate',
-        default=1.0e-4,
-    )
-    group.add_argument(
-        '--min_lr',
-        type=float,
-        help='Learning rate',
-        default=1.0e-6,
-    )
-    group.add_argument(
         '--num_epochs',
         type=int,
         help='Number of training epochs',
         default=10,
-    )
-    group.add_argument(
-        '--weight_decay',
-        type=float,
-        help='Weight decay',
-        default=1e-4,
     )
     group.add_argument(
         '--label_smoothing',
@@ -68,10 +52,38 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         default=0.0,
     )
     group.add_argument(
+        '--num_workers',
+        type=int,
+        default=os.cpu_count(),
+        help='Number of workers for data loading',
+    )
+
+    # optimizer
+    group.add_argument(
+        '--lr',
+        type=float,
+        help='Learning rate',
+        default=1.0e-4,
+    )
+    group.add_argument(
+        '--weight_decay',
+        type=float,
+        help='Weight decay',
+        default=1e-4,
+    )
+
+    # scheduler
+    group.add_argument(
+        '--min_lr',
+        type=float,
+        help='Learning rate',
+        default=1.0e-6,
+    )
+    group.add_argument(
         '--scheduler_T_0',
         type=int,
         help='Number of iterations for the first restart in CosineAnnealingWarmRestarts',
-        default=10,
+        default=5,
     )
     group.add_argument(
         '--scheduler_T_mult',
@@ -79,16 +91,25 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Multiplier for the period of the cosine annealing scheduler',
         default=1,
     )
+
+    # EMA
+    group.add_argument(
+        '--model_ema_decay',
+        type=float,
+        help='Decay factor for Model EMA',
+        default=0.9999,
+    )
+    group.add_argument(
+        '--model_ema_warmup',
+        action='store_true',
+        help='Whether to use warmup for Model EMA',
+    )
+
+    # other
     group.add_argument(
         '--use_mixup_cutmix',
         action='store_true',
         help='Whether to use MixUp & CutMiX',
-    )
-    group.add_argument(
-        '--num_workers',
-        type=int,
-        default=os.cpu_count(),
-        help='Number of workers for data loading',
     )
 
 def add_wandb_opts(parser: argparse.ArgumentParser) -> None:

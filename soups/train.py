@@ -10,6 +10,7 @@ import torchvision.transforms.v2 as v2
 import wandb
 from loguru import logger
 from sklearn.metrics import precision_recall_fscore_support
+from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
@@ -24,6 +25,10 @@ def train_model(args: argparse.Namespace) -> None:
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     logger.info(f'Seed: {args.seed}')
+
+    # training device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logger.info(f'Using device: {device}')
 
     # loading dataset
     train_transforms = torchvision.transforms.Compose([
@@ -81,7 +86,7 @@ def train_model(args: argparse.Namespace) -> None:
         train_dataset,
         batch_size=args.train_batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=args.num_workers,
         pin_memory=True,
         collate_fn=collate_fn,
         persistent_workers=True,
@@ -90,7 +95,7 @@ def train_model(args: argparse.Namespace) -> None:
         test_dataset,
         batch_size=args.eval_batch_size,
         shuffle=False,
-        num_workers=4,
+        num_workers=args.num_workers,
         pin_memory=True,
         persistent_workers=True,
     )
@@ -98,7 +103,7 @@ def train_model(args: argparse.Namespace) -> None:
         val_dataset,
         batch_size=args.eval_batch_size,
         shuffle=False,
-        num_workers=4,
+        num_workers=args.num_workers,
         pin_memory=True,
         persistent_workers=True,
     )
@@ -162,9 +167,13 @@ def train_model(args: argparse.Namespace) -> None:
         eta_min=args.min_lr,
     )
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    logger.info(f'Using device: {device}')
     model.to(device)
+    model_ema = ModelEmaV3(
+        model=model,
+        device=device,
+        decay=args.model_ema_decay,
+        use_warmup=args.model_ema_warmup,
+    )
 
     global_step = 0
     num_train_iters = len(train_data_loader)
@@ -182,6 +191,8 @@ def train_model(args: argparse.Namespace) -> None:
             loss.backward()
             optimizer.step()
 
+            model_ema.update(model)
+
             if wandb_run is not None:
                 log_data = {
                     f'learning_rate/group_{group_id}': group_lr
@@ -198,7 +209,9 @@ def train_model(args: argparse.Namespace) -> None:
             global_step += 1
 
         # validation
-        model.eval()
+        ema_model = model_ema.module
+        ema_model.eval()
+
         val_iter = tqdm(val_data_loader, desc=f'Validating epoch {epoch + 1}')
         val_loss = 0.0
         num_corrects = 0
@@ -210,7 +223,7 @@ def train_model(args: argparse.Namespace) -> None:
                 images = images.to(device)
                 labels = labels.to(device)
 
-                outputs = model(images)
+                outputs = ema_model(images)
                 preds = outputs.argmax(dim=1)
                 loss = criterion(outputs, labels)
 
@@ -249,7 +262,6 @@ def train_model(args: argparse.Namespace) -> None:
 
     # TODO: save model checkpoints
     # TODO: test model
-    # TODO: integrate EMA (Exponential Moving Average) for model weights
 
 def main():
     parser = argparse.ArgumentParser(
