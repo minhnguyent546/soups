@@ -1,7 +1,8 @@
 import argparse
 import os
 import random
-from typing import Any, TypedDict
+from datetime import datetime
+from typing import TypedDict
 
 import timm
 import torch
@@ -17,10 +18,10 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 from torch.utils.data import default_collate
 from tqdm.autonotebook import tqdm
-from wandb.sdk.wandb_run import Run as WandbRun
 
 import soups.opts as opts
 from soups.utils.metric import AverageMeter
+from soups.utils import save_metadata_to_checkpoint
 
 
 def train_model(args: argparse.Namespace) -> None:
@@ -28,6 +29,12 @@ def train_model(args: argparse.Namespace) -> None:
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     logger.info(f'Seed: {args.seed}')
+
+    checkpoint_dir = os.path.join(
+        args.checkpoints_dir,
+        datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
+    )
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     # training device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -141,6 +148,12 @@ def train_model(args: argparse.Namespace) -> None:
     else:
         raise ValueError(f'Unsupported model: {args.model}')
 
+    model.to(device)
+    if args.from_checkpoint is not None:
+        logger.info(f'Loading model from checkpoint: {args.from_checkpoint}')
+        checkpoint = torch.load(args.from_checkpoint, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+
     # setting up logging with wandb
     wandb_run = None
     if args.wandb_logging:
@@ -153,6 +166,11 @@ def train_model(args: argparse.Namespace) -> None:
             id=args.wandb_resume_id,
             resume='must' if args.wandb_resume_id is not None else None,
         )
+    save_metadata_to_checkpoint(
+        checkpoint_dir=checkpoint_dir,
+        args=args,
+        wandb_run=wandb_run,
+    )
 
     num_model_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f'Using model: {args.model}')
@@ -170,7 +188,6 @@ def train_model(args: argparse.Namespace) -> None:
         eta_min=args.min_lr,
     )
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
-    model.to(device)
 
     if args.run_test_only:
         test_results = eval_model(
@@ -256,8 +273,17 @@ def train_model(args: argparse.Namespace) -> None:
                 'val/f1': val_results['f1'],
             }, step=global_step)
 
-    # TODO: save model checkpoints
-    # TODO: test model
+        # saving checkpoint
+        checkpoint_path = os.path.join(
+            checkpoint_dir,
+            f'model_epoch_{epoch + 1}.pth',
+        )
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'epoch': epoch,
+            'global_step': global_step,
+        }, checkpoint_path)
+
     # TODO: acc with mixup&cutmix
     # TODO: acc@k
 
@@ -277,7 +303,7 @@ def eval_model(
     model_mode_before = model.training
     model.eval()
 
-    eval_iter = tqdm(eval_data_loader, desc=f'Evaluating model')
+    eval_iter = tqdm(eval_data_loader, desc='Evaluating model')
     eval_loss = AverageMeter('eval_loss', fmt=':0.4f')
     eval_accuracy = AverageMeter('eval_accuracy', fmt=':0.4f')
     all_preds = []
@@ -309,15 +335,15 @@ def eval_model(
         all_labels,
         all_preds,
         average='macro',
-        zero_division=0,
+        zero_division=0,  # pyright: ignore[reportArgumentType]
     )
 
     return {
         'loss': eval_loss.avg,
         'accuracy': eval_accuracy.avg,
-        'precision': eval_precision,
-        'recall': eval_recall,
-        'f1': eval_f1,
+        'precision': float(eval_precision),
+        'recall': float(eval_recall),
+        'f1': float(eval_f1),
     }
 
 

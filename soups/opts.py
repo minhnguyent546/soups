@@ -35,6 +35,17 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
 
     # basic stuff
     group.add_argument(
+        '--checkpoints_dir',
+        type=str,
+        help='Checkpoints directory for saving stuff',
+        default='./checkpoints',
+    )
+    group.add_argument(
+        '--from_checkpoint',
+        type=str,
+        help='Path to the checkpoint storing the model state',
+    )
+    group.add_argument(
         '--train_batch_size',
         type=int,
         help='Training batch size',
