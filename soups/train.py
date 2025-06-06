@@ -16,6 +16,7 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 from torch.utils.data import default_collate
 from tqdm.autonotebook import tqdm
+from wandb.sdk.wandb_run import Run as WandbRun
 
 import soups.opts as opts
 
@@ -186,7 +187,6 @@ def train_model(args: argparse.Namespace) -> None:
 
             optimizer.zero_grad()
             outputs = model(images)
-            preds = outputs.argmax(dim=1)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -209,59 +209,82 @@ def train_model(args: argparse.Namespace) -> None:
             global_step += 1
 
         # validation
-        ema_model = model_ema.module
-        ema_model.eval()
-
-        val_iter = tqdm(val_data_loader, desc=f'Validating epoch {epoch + 1}')
-        val_loss = 0.0
-        num_corrects = 0
-        num_totals = 0
-        all_preds = []
-        all_labels = []
-        with torch.no_grad():
-            for images, labels in val_iter:
-                images = images.to(device)
-                labels = labels.to(device)
-
-                outputs = ema_model(images)
-                preds = outputs.argmax(dim=1)
-                loss = criterion(outputs, labels)
-
-                num_totals += labels.shape[0]
-                num_corrects += (preds == labels).sum().item()
-                all_preds.extend(preds.detach().cpu().numpy())
-                all_labels.extend(labels.detach().cpu().numpy())
-                val_loss += loss.item()
-                val_iter.set_postfix({
-                    'loss': f'{loss:0.4f}',
-                })
-
-            val_loss /= len(val_iter)
-            val_acc = num_corrects / num_totals
-            val_precision, val_recall, val_f1, _ = precision_recall_fscore_support(
-                all_labels,
-                all_preds,
-                average='macro',
-                zero_division=0,
-            )
-            print(
-                f'Epoch {epoch + 1}: val_loss {val_loss:0.4f} | '
-                f'val_acc {val_acc:0.4f} | '
-                f'val_precision {val_precision:0.4f} | '
-                f'val_recall {val_recall:0.4f} | '
-                f'val_f1 {val_f1:0.4f}'
-            )
-            if wandb_run is not None:
-                wandb_run.log({
-                    'val/loss': val_loss,
-                    'val/accuracy': val_acc,
-                    'val/precision': val_precision,
-                    'val/recall': val_recall,
-                    'val/f1': val_f1,
-                }, step=global_step)
+        eval_model(
+            model=model_ema.module,
+            eval_data_loader=val_data_loader,
+            device=device,
+            criterion=criterion,
+            epoch=epoch,
+            global_step=global_step,
+            wandb_run=wandb_run,
+        )
 
     # TODO: save model checkpoints
     # TODO: test model
+    # TODO: acc with mixup&cutmix
+    # TODO: acc@k
+
+def eval_model(
+    model: nn.Module,
+    eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
+    device: torch.device,
+    criterion,
+    epoch: int,
+    global_step: int,
+    wandb_run: WandbRun | None = None,
+) -> None:
+    model_mode_before = model.training
+    model.eval()
+
+    val_iter = tqdm(eval_data_loader, desc=f'Validating epoch {epoch + 1}')
+    val_loss = 0.0
+    num_corrects = 0
+    num_totals = 0
+    all_preds = []
+    all_labels = []
+    with torch.no_grad():
+        for images, labels in val_iter:
+            images = images.to(device)
+            labels = labels.to(device)
+
+            outputs = model(images)
+            preds = outputs.argmax(dim=1)
+            loss = criterion(outputs, labels)
+
+            num_totals += labels.shape[0]
+            num_corrects += (preds == labels).sum().item()
+            all_preds.extend(preds.detach().cpu().numpy())
+            all_labels.extend(labels.detach().cpu().numpy())
+            val_loss += loss.item()
+            val_iter.set_postfix({
+                'loss': f'{loss:0.4f}',
+            })
+
+        val_loss /= len(val_iter)
+        val_acc = num_corrects / num_totals
+        val_precision, val_recall, val_f1, _ = precision_recall_fscore_support(
+            all_labels,
+            all_preds,
+            average='macro',
+            zero_division=0,
+        )
+        print(
+            f'Epoch {epoch + 1}: val_loss {val_loss:0.4f} | '
+            f'val_acc {val_acc:0.4f} | '
+            f'val_precision {val_precision:0.4f} | '
+            f'val_recall {val_recall:0.4f} | '
+            f'val_f1 {val_f1:0.4f}'
+        )
+        if wandb_run is not None:
+            wandb_run.log({
+                'val/loss': val_loss,
+                'val/accuracy': val_acc,
+                'val/precision': val_precision,
+                'val/recall': val_recall,
+                'val/f1': val_f1,
+            }, step=global_step)
+
+    model.train(model_mode_before)
 
 def main():
     parser = argparse.ArgumentParser(
