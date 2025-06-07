@@ -187,11 +187,12 @@ def train_model(args: argparse.Namespace) -> None:
             id=args.wandb_resume_id,
             resume='must' if args.wandb_resume_id is not None else None,
         )
-    save_metadata_to_checkpoint(
-        checkpoint_dir=checkpoint_dir,
-        args=args,
-        wandb_run=wandb_run,
-    )
+    if not args.run_test_only:
+        save_metadata_to_checkpoint(
+            checkpoint_dir=checkpoint_dir,
+            args=args,
+            wandb_run=wandb_run,
+        )
 
     num_model_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f'Using model: {args.model}')
@@ -242,6 +243,8 @@ def train_model(args: argparse.Namespace) -> None:
     training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
     num_train_iters = len(train_data_loader)
     optimizer.zero_grad()
+    if args.max_grad_norm > 0:
+        logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
     for epoch in range(args.num_epochs):
         model.train()
         train_iter = tqdm(train_data_loader, desc=f'Training epoch {epoch + 1}/{args.num_epochs}')
