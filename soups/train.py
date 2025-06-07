@@ -7,6 +7,7 @@ from typing import TypedDict
 import timm
 import torch
 import torch.nn as nn
+import torch.nn.functional as Fun
 import torchvision
 import torchvision.transforms.v2 as v2
 import wandb
@@ -20,12 +21,12 @@ from torch.utils.data import default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.opts as opts
-from soups.utils import save_metadata_to_checkpoint, set_seed
+import soups.utils as utils
 from soups.utils.metric import AverageMeter
 
 
 def train_model(args: argparse.Namespace) -> None:
-    set_seed(args.seed)
+    utils.set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
     if not args.run_test_only:
@@ -188,7 +189,7 @@ def train_model(args: argparse.Namespace) -> None:
             resume='must' if args.wandb_resume_id is not None else None,
         )
     if not args.run_test_only:
-        save_metadata_to_checkpoint(
+        utils.save_metadata_to_checkpoint(
             checkpoint_dir=checkpoint_dir,
             args=args,
             wandb_run=wandb_run,
@@ -209,15 +210,12 @@ def train_model(args: argparse.Namespace) -> None:
         T_mult=args.scheduler_T_mult,
         eta_min=args.min_lr,
     )
-    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
-    eval_criterion = nn.CrossEntropyLoss()
 
     if args.run_test_only:
         test_results = eval_model(
             model=model,
             eval_data_loader=test_data_loader,
             device=device,
-            criterion=criterion,
         )
         print(
             '** Test results **\n'
@@ -241,28 +239,53 @@ def train_model(args: argparse.Namespace) -> None:
 
     global_step = 0
     training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
-    num_train_iters = len(train_data_loader)
     optimizer.zero_grad()
     if args.max_grad_norm > 0:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
+
     for epoch in range(args.num_epochs):
         model.train()
-        train_iter = tqdm(train_data_loader, desc=f'Training epoch {epoch + 1}/{args.num_epochs}')
-        for i, (images, labels) in enumerate(train_iter):
-            images = images.to(device)
-            labels = labels.to(device)
 
-            with autocast_context:
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+        train_data_iter = iter(train_data_loader)
+        total_num_samples = len(train_data_iter)
+        last_iter_num_batches = total_num_samples % args.gradient_accum_steps
+        if last_iter_num_batches == 0:
+            last_iter_num_batches = args.gradient_accum_steps
 
-            scaler.scale(loss).backward()
+        # determine the number of updates for the current epoch
+        # based on gradient accumulation steps
+        total_updates = (total_num_samples + args.gradient_accum_steps - 1) // args.gradient_accum_steps  # ceil_div
+
+        train_progressbar = tqdm(
+            range(total_updates), desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
+        )
+        for update_step in train_progressbar:
+            num_batches = args.gradient_accum_steps if update_step + 1 < total_updates else last_iter_num_batches
+            batches, num_items_in_batch = utils.get_batch_samples(
+                data_iter=train_data_iter, num_batches=num_batches, labels_index=1,
+            )
+            assert num_items_in_batch is not None
+            num_batches = len(batches)  # actual number batches retrieved
+
+            batch_loss: float = 0.0
+            for images, labels in batches:
+                images = images.to(device)
+                labels = labels.to(device)
+
+                with autocast_context:
+                    logits = model(images)
+                    loss = Fun.cross_entropy(input=logits, target=labels, reduction='sum')
+                    loss = loss / num_items_in_batch
+
+                scaler.scale(loss).backward()
+                batch_loss += loss.detach().item()
 
             if args.max_grad_norm > 0:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(), max_norm=args.max_grad_norm, norm_type=2,
                 )
+
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
@@ -275,14 +298,14 @@ def train_model(args: argparse.Namespace) -> None:
                     f'learning_rate/group_{group_id}': group_lr
                     for group_id, group_lr in enumerate(scheduler.get_last_lr())
                 }
-                log_data['train/loss'] = loss.item()
+                log_data['train/loss'] = batch_loss
                 wandb_run.log(log_data, step=global_step)
 
-            scheduler.step(epoch + i / num_train_iters)  # pyright: ignore[reportArgumentType]
+            scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
 
-            training_loss.update(loss.item(), labels.shape[0])
-            train_iter.set_postfix({
-                'loss': f'{loss:0.4f}'
+            training_loss.update(batch_loss, num_items_in_batch)
+            train_progressbar.set_postfix({
+                'loss': f'{batch_loss:0.4f}'
             })
             global_step += 1
 
@@ -291,7 +314,6 @@ def train_model(args: argparse.Namespace) -> None:
             model=model_ema.module if model_ema is not None else model,
             eval_data_loader=val_data_loader,
             device=device,
-            criterion=eval_criterion,
         )
         print(
             f'Epoch {epoch + 1}: val_loss {val_results["loss"]:0.4f} | '
@@ -321,7 +343,6 @@ def train_model(args: argparse.Namespace) -> None:
             'global_step': global_step,
         }, checkpoint_path)
 
-    # TODO: using gradient accumulation
     # TODO: acc with mixup&cutmix
     # TODO: acc@k
 
@@ -336,7 +357,6 @@ def eval_model(
     model: nn.Module,
     eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
     device: torch.device,
-    criterion,
     autocast_context=None,
 ) -> EvalResults:
     if autocast_context is None:
@@ -356,10 +376,10 @@ def eval_model(
             labels = labels.to(device)
 
             with autocast_context:
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+                logits = model(images)
+                loss = Fun.cross_entropy(input=logits, target=labels)
 
-            preds = outputs.argmax(dim=1)
+            preds = logits.argmax(dim=1)
 
             all_preds.extend(preds.detach().cpu().numpy())
             all_labels.extend(labels.detach().cpu().numpy())
