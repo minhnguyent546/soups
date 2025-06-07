@@ -247,7 +247,7 @@ def train_model(args: argparse.Namespace) -> None:
         model.train()
 
         train_data_iter = iter(train_data_loader)
-        total_num_samples = len(train_data_iter)
+        total_num_samples = len(train_data_loader)
         last_iter_num_batches = total_num_samples % args.gradient_accum_steps
         if last_iter_num_batches == 0:
             last_iter_num_batches = args.gradient_accum_steps
@@ -275,7 +275,8 @@ def train_model(args: argparse.Namespace) -> None:
                 with autocast_context:
                     logits = model(images)
                     loss = Fun.cross_entropy(input=logits, target=labels, reduction='sum')
-                    loss = loss / num_items_in_batch
+                    if num_items_in_batch > 0:
+                        loss = loss / num_items_in_batch
 
                 scaler.scale(loss).backward()
                 batch_loss += loss.detach().item()
