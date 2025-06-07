@@ -27,11 +27,12 @@ def train_model(args: argparse.Namespace) -> None:
     set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
-    checkpoint_dir = os.path.join(
-        args.checkpoints_dir,
-        datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
-    )
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    if not args.run_test_only:
+        checkpoint_dir = os.path.join(
+            args.checkpoints_dir,
+            datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
+        )
+        os.makedirs(checkpoint_dir, exist_ok=True)
 
     # training device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -186,6 +187,7 @@ def train_model(args: argparse.Namespace) -> None:
         eta_min=args.min_lr,
     )
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
+    eval_criterion = nn.CrossEntropyLoss()
 
     if args.run_test_only:
         test_results = eval_model(
@@ -212,6 +214,7 @@ def train_model(args: argparse.Namespace) -> None:
             decay=args.model_ema_decay,
             use_warmup=args.model_ema_warmup,
         )
+        logger.info('EMA enabled')
 
     global_step = 0
     training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
@@ -253,7 +256,7 @@ def train_model(args: argparse.Namespace) -> None:
             model=model_ema.module if model_ema is not None else model,
             eval_data_loader=val_data_loader,
             device=device,
-            criterion=criterion,
+            criterion=eval_criterion,
         )
         print(
             f'Epoch {epoch + 1}: val_loss {val_results["loss"]:0.4f} | '
