@@ -82,6 +82,14 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Number of workers for data loading',
     )
 
+    # mixed precision training
+    group.add_argument(
+        '--mixed_precision',
+        type=str,
+        choices=['fp16', 'bf16'],
+        help='Whether to enable mixed precision training (fp16 or bf16)',
+    )
+
     # optimizer
     group.add_argument(
         '--lr',
@@ -139,6 +147,12 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         '--use_mixup_cutmix',
         action='store_true',
         help='Whether to use MixUp & CutMiX',
+    )
+    group.add_argument(
+        '--max_grad_norm',
+        type=float,
+        help='Maximum gradient norm for gradient clipping',
+        default=0.0,
     )
 
 def add_wandb_opts(parser: argparse.ArgumentParser) -> None:

@@ -1,5 +1,6 @@
 import argparse
 import os
+from contextlib import nullcontext
 from datetime import datetime
 from typing import TypedDict
 
@@ -117,6 +118,27 @@ def train_model(args: argparse.Namespace) -> None:
         persistent_workers=True,
     )
 
+    # mixed precision training
+    mp_dtype = torch.float32
+    if device.type == 'cuda' and args.mixed_precision == 'fp16':
+        mp_dtype = torch.float16
+    elif device.type == 'cuda' and args.mixed_precision == 'bf16':
+        if torch.cuda.is_bf16_supported():
+            mp_dtype = torch.bfloat16
+        else:
+            mp_dtype = torch.float16
+    if mp_dtype != torch.float32:
+        logger.info(f'Mixed precision training enabled with dtype {mp_dtype}')
+
+    autocast_context = torch.autocast(
+        device_type=device.type,
+        dtype=mp_dtype,
+        enabled=(mp_dtype in (torch.float16, torch.bfloat16)),
+    )
+    scaler = torch.amp.grad_scaler.GradScaler(
+        device=device.type, enabled=(mp_dtype == torch.float16),
+    )
+
     # creating model
     if args.model == 'resnet50' or args.model == 'densenet121':
         if args.model == 'resnet50':
@@ -219,6 +241,7 @@ def train_model(args: argparse.Namespace) -> None:
     global_step = 0
     training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
     num_train_iters = len(train_data_loader)
+    optimizer.zero_grad()
     for epoch in range(args.num_epochs):
         model.train()
         train_iter = tqdm(train_data_loader, desc=f'Training epoch {epoch + 1}/{args.num_epochs}')
@@ -226,11 +249,20 @@ def train_model(args: argparse.Namespace) -> None:
             images = images.to(device)
             labels = labels.to(device)
 
+            with autocast_context:
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+
+            scaler.scale(loss).backward()
+
+            if args.max_grad_norm > 0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=args.max_grad_norm, norm_type=2,
+                )
+            scaler.step(optimizer)
+            scaler.update()
             optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
 
             if model_ema is not None:
                 model_ema.update(model)
@@ -286,7 +318,6 @@ def train_model(args: argparse.Namespace) -> None:
             'global_step': global_step,
         }, checkpoint_path)
 
-    # TODO: mixed precision training
     # TODO: using gradient accumulation
     # TODO: acc with mixup&cutmix
     # TODO: acc@k
@@ -303,7 +334,11 @@ def eval_model(
     eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
     device: torch.device,
     criterion,
+    autocast_context=None,
 ) -> EvalResults:
+    if autocast_context is None:
+        autocast_context = nullcontext()
+
     model_mode_before = model.training
     model.eval()
 
@@ -317,9 +352,11 @@ def eval_model(
             images = images.to(device)
             labels = labels.to(device)
 
-            outputs = model(images)
+            with autocast_context:
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+
             preds = outputs.argmax(dim=1)
-            loss = criterion(outputs, labels)
 
             all_preds.extend(preds.detach().cpu().numpy())
             all_labels.extend(labels.detach().cpu().numpy())
@@ -333,6 +370,7 @@ def eval_model(
                 'loss': f'{loss:0.4f}',
             })
 
+    # set model back to the original mode
     model.train(model_mode_before)
 
     eval_precision, eval_recall, eval_f1, _ = precision_recall_fscore_support(
