@@ -90,6 +90,14 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to enable mixed precision training (fp16 or bf16)',
     )
 
+    # gradient accumulation
+    group.add_argument(
+        '--gradient_accum_steps',
+        type=int,
+        help='Number of gradient accumulation steps',
+        default=1,
+    )
+
     # optimizer
     group.add_argument(
         '--lr',
