@@ -457,7 +457,7 @@ def maybe_log_eval_results(
         'epoch': epoch + 1,
     }
     for i, class_name in enumerate(class_names):
-        log_data[f'val/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
+        log_data[f'{prefix}/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
 
     wandb_run.log(log_data)
 
