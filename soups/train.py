@@ -12,13 +12,17 @@ import torchvision
 import torchvision.transforms.v2 as v2
 import wandb
 from loguru import logger
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import (
+    confusion_matrix,
+    precision_recall_fscore_support,
+)
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 from torch.utils.data import default_collate
 from tqdm.autonotebook import tqdm
+from wandb.sdk.wandb_run import Run as WandbRun
 
 import soups.opts as opts
 import soups.utils as utils
@@ -71,7 +75,8 @@ def train_model(args: argparse.Namespace) -> None:
         root=os.path.join(args.dataset_dir, 'val'),
         transform=eval_transforms,
     )
-    num_classes = len(train_dataset.classes)
+    class_names = train_dataset.classes
+    num_classes = len(class_names)
 
     logger.info(
         f'num_classes = {num_classes}, '
@@ -188,6 +193,8 @@ def train_model(args: argparse.Namespace) -> None:
             id=args.wandb_resume_id,
             resume='must' if args.wandb_resume_id is not None else None,
         )
+        wandb_run.define_metric(name='val/*', step_metric='epoch')
+        wandb_run.define_metric(name='train/epoch_loss', step_metric='epoch')
     if not args.run_test_only:
         utils.save_metadata_to_checkpoint(
             checkpoint_dir=checkpoint_dir,
@@ -216,6 +223,7 @@ def train_model(args: argparse.Namespace) -> None:
             model=model,
             eval_data_loader=test_data_loader,
             device=device,
+            num_classes=num_classes,
         )
         print(
             '** Test results **\n'
@@ -225,6 +233,10 @@ def train_model(args: argparse.Namespace) -> None:
             f'  Recall: {test_results["recall"]:0.4f}\n'
             f'  F1: {test_results["f1"]:0.4f}\n'
         )
+        print('  Per class accuracy:')
+        for i, class_name in enumerate(class_names):
+            print(f'    {class_name}: {test_results["per_class_accuracy"][i]:0.4f}')
+
         return
 
     model_ema = None
@@ -315,6 +327,7 @@ def train_model(args: argparse.Namespace) -> None:
             model=model_ema.module if model_ema is not None else model,
             eval_data_loader=val_data_loader,
             device=device,
+            num_classes=num_classes,
         )
         print(
             f'Epoch {epoch + 1}: val_loss {val_results["loss"]:0.4f} | '
@@ -323,15 +336,15 @@ def train_model(args: argparse.Namespace) -> None:
             f'val_recall {val_results["recall"]:0.4f} | '
             f'val_f1 {val_results["f1"]:0.4f}'
         )
-        if wandb_run is not None:
-            wandb_run.log({
-                'val/loss': val_results["loss"],
-                'val/accuracy': val_results['accuracy'],
-                'val/precision': val_results['precision'],
-                'val/recall': val_results['recall'],
-                'val/f1': val_results['f1'],
-                'train/epoch_loss': training_loss.avg,
-            }, step=global_step)
+
+        assert len(val_results['per_class_accuracy']) == num_classes
+        maybe_log_eval_results(
+            eval_results=val_results,
+            epoch=epoch,
+            prefix='val',
+            class_names=class_names,
+            wandb_run=wandb_run,
+        )
 
         # saving checkpoint
         checkpoint_path = os.path.join(
@@ -353,11 +366,13 @@ class EvalResults(TypedDict):
     precision: float
     recall: float
     f1: float
+    per_class_accuracy: list[float]
 
 def eval_model(
     model: nn.Module,
     eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
     device: torch.device,
+    num_classes: int | None = None,
     autocast_context=None,
 ) -> EvalResults:
     if autocast_context is None:
@@ -403,6 +418,12 @@ def eval_model(
         average='macro',
         zero_division=0,  # pyright: ignore[reportArgumentType]
     )
+    conf_matrix = confusion_matrix(
+        y_true=all_labels,
+        y_pred=all_preds,
+        labels=list(range(num_classes)) if num_classes is not None else None,
+    )
+    per_class_accuracy = conf_matrix.diagonal() / conf_matrix.sum(axis=1)
 
     return {
         'loss': eval_loss.avg,
@@ -410,8 +431,35 @@ def eval_model(
         'precision': float(eval_precision),
         'recall': float(eval_recall),
         'f1': float(eval_f1),
+        'per_class_accuracy': per_class_accuracy.tolist(),
     }
 
+def maybe_log_eval_results(
+    eval_results: EvalResults,
+    epoch: int,
+    prefix: str = 'val',
+    class_names: list[str] | None = None,
+    wandb_run: WandbRun | None = None,
+) -> None:
+    if wandb_run is None:
+        return
+
+    num_classes = len(eval_results['per_class_accuracy'])
+    if class_names is None:
+        class_names = [f'class_{i}' for i in range(num_classes)]
+
+    log_data = {
+        f'{prefix}/loss': eval_results["loss"],
+        f'{prefix}/accuracy': eval_results['accuracy'],
+        f'{prefix}/precision': eval_results['precision'],
+        f'{prefix}/recall': eval_results['recall'],
+        f'{prefix}/f1': eval_results['f1'],
+        'epoch': epoch + 1,
+    }
+    for i, class_name in enumerate(class_names):
+        log_data[f'val/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
+
+    wandb_run.log(log_data)
 
 def main():
     parser = argparse.ArgumentParser(
