@@ -245,6 +245,8 @@ def train_model(args: argparse.Namespace) -> None:
     optimizer.zero_grad()
     if args.max_grad_norm > 0:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
+
+    best_val_accuracy = 0.0
     for epoch in range(args.num_epochs):
         model.train()
         train_iter = tqdm(train_data_loader, desc=f'Training epoch {epoch + 1}/{args.num_epochs}')
@@ -317,9 +319,22 @@ def train_model(args: argparse.Namespace) -> None:
         )
         torch.save({
             'model_state_dict': model.state_dict(),
+            'val_results': val_results,
             'epoch': epoch,
             'global_step': global_step,
         }, checkpoint_path)
+
+        # saving checkpoint with best validation accuracy
+        if val_results['accuracy'] > best_val_accuracy:
+            best_val_accuracy = val_results['accuracy']
+            best_checkpoint_path = os.path.join(checkpoint_dir, 'model_best_val_acc.pth')
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'val_results': val_results,
+                'epoch': epoch,
+                'global_step': global_step,
+            }, best_checkpoint_path)
+            print(f'Best val accuracy so far: {best_val_accuracy:0.4f}')
 
     # TODO: using gradient accumulation
     # TODO: acc with mixup&cutmix
