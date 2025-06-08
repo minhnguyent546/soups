@@ -7,25 +7,30 @@ from typing import TypedDict
 import timm
 import torch
 import torch.nn as nn
+import torch.nn.functional as Fun
 import torchvision
 import torchvision.transforms.v2 as v2
 import wandb
 from loguru import logger
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import (
+    confusion_matrix,
+    precision_recall_fscore_support,
+)
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 from torch.utils.data import default_collate
 from tqdm.autonotebook import tqdm
+from wandb.sdk.wandb_run import Run as WandbRun
 
 import soups.opts as opts
-from soups.utils import save_metadata_to_checkpoint, set_seed
+import soups.utils as utils
 from soups.utils.metric import AverageMeter
 
 
 def train_model(args: argparse.Namespace) -> None:
-    set_seed(args.seed)
+    utils.set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
     if not args.run_test_only:
@@ -70,7 +75,8 @@ def train_model(args: argparse.Namespace) -> None:
         root=os.path.join(args.dataset_dir, 'val'),
         transform=eval_transforms,
     )
-    num_classes = len(train_dataset.classes)
+    class_names = train_dataset.classes
+    num_classes = len(class_names)
 
     logger.info(
         f'num_classes = {num_classes}, '
@@ -187,8 +193,10 @@ def train_model(args: argparse.Namespace) -> None:
             id=args.wandb_resume_id,
             resume='must' if args.wandb_resume_id is not None else None,
         )
+        wandb_run.define_metric(name='val/*', step_metric='epoch')
+        wandb_run.define_metric(name='train/epoch_loss', step_metric='epoch')
     if not args.run_test_only:
-        save_metadata_to_checkpoint(
+        utils.save_metadata_to_checkpoint(
             checkpoint_dir=checkpoint_dir,
             args=args,
             wandb_run=wandb_run,
@@ -209,15 +217,13 @@ def train_model(args: argparse.Namespace) -> None:
         T_mult=args.scheduler_T_mult,
         eta_min=args.min_lr,
     )
-    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
-    eval_criterion = nn.CrossEntropyLoss()
 
     if args.run_test_only:
         test_results = eval_model(
             model=model,
             eval_data_loader=test_data_loader,
             device=device,
-            criterion=criterion,
+            num_classes=num_classes,
         )
         print(
             '** Test results **\n'
@@ -227,6 +233,10 @@ def train_model(args: argparse.Namespace) -> None:
             f'  Recall: {test_results["recall"]:0.4f}\n'
             f'  F1: {test_results["f1"]:0.4f}\n'
         )
+        print('  Per class accuracy:')
+        for i, class_name in enumerate(class_names):
+            print(f'    {class_name}: {test_results["per_class_accuracy"][i]:0.4f}')
+
         return
 
     model_ema = None
@@ -241,7 +251,6 @@ def train_model(args: argparse.Namespace) -> None:
 
     global_step = 0
     training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
-    num_train_iters = len(train_data_loader)
     optimizer.zero_grad()
     if args.max_grad_norm > 0:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
@@ -249,22 +258,48 @@ def train_model(args: argparse.Namespace) -> None:
     best_val_accuracy = 0.0
     for epoch in range(args.num_epochs):
         model.train()
-        train_iter = tqdm(train_data_loader, desc=f'Training epoch {epoch + 1}/{args.num_epochs}')
-        for i, (images, labels) in enumerate(train_iter):
-            images = images.to(device)
-            labels = labels.to(device)
 
-            with autocast_context:
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+        train_data_iter = iter(train_data_loader)
+        total_num_samples = len(train_data_loader)
+        last_iter_num_batches = total_num_samples % args.gradient_accum_steps
+        if last_iter_num_batches == 0:
+            last_iter_num_batches = args.gradient_accum_steps
 
-            scaler.scale(loss).backward()
+        # determine the number of updates for the current epoch
+        # based on gradient accumulation steps
+        total_updates = (total_num_samples + args.gradient_accum_steps - 1) // args.gradient_accum_steps  # ceil_div
+
+        train_progressbar = tqdm(
+            range(total_updates), desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
+        )
+        for update_step in train_progressbar:
+            num_batches = args.gradient_accum_steps if update_step + 1 < total_updates else last_iter_num_batches
+            batches, num_items_in_batch = utils.get_batch_samples(
+                data_iter=train_data_iter, num_batches=num_batches, labels_index=1,
+            )
+            assert num_items_in_batch is not None
+            num_batches = len(batches)  # actual number batches retrieved
+
+            batch_loss: float = 0.0
+            for images, labels in batches:
+                images = images.to(device)
+                labels = labels.to(device)
+
+                with autocast_context:
+                    logits = model(images)
+                    loss = Fun.cross_entropy(input=logits, target=labels, reduction='sum')
+                    if num_items_in_batch > 0:
+                        loss = loss / num_items_in_batch
+
+                scaler.scale(loss).backward()
+                batch_loss += loss.detach().item()
 
             if args.max_grad_norm > 0:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(), max_norm=args.max_grad_norm, norm_type=2,
                 )
+
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
@@ -277,14 +312,14 @@ def train_model(args: argparse.Namespace) -> None:
                     f'learning_rate/group_{group_id}': group_lr
                     for group_id, group_lr in enumerate(scheduler.get_last_lr())
                 }
-                log_data['train/loss'] = loss.item()
+                log_data['train/loss'] = batch_loss
                 wandb_run.log(log_data, step=global_step)
 
-            scheduler.step(epoch + i / num_train_iters)  # pyright: ignore[reportArgumentType]
+            scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
 
-            training_loss.update(loss.item(), labels.shape[0])
-            train_iter.set_postfix({
-                'loss': f'{loss:0.4f}'
+            training_loss.update(batch_loss, num_items_in_batch)
+            train_progressbar.set_postfix({
+                'loss': f'{batch_loss:0.4f}'
             })
             global_step += 1
 
@@ -293,7 +328,7 @@ def train_model(args: argparse.Namespace) -> None:
             model=model_ema.module if model_ema is not None else model,
             eval_data_loader=val_data_loader,
             device=device,
-            criterion=eval_criterion,
+            num_classes=num_classes,
         )
         print(
             f'Epoch {epoch + 1}: val_loss {val_results["loss"]:0.4f} | '
@@ -302,15 +337,15 @@ def train_model(args: argparse.Namespace) -> None:
             f'val_recall {val_results["recall"]:0.4f} | '
             f'val_f1 {val_results["f1"]:0.4f}'
         )
-        if wandb_run is not None:
-            wandb_run.log({
-                'val/loss': val_results["loss"],
-                'val/accuracy': val_results['accuracy'],
-                'val/precision': val_results['precision'],
-                'val/recall': val_results['recall'],
-                'val/f1': val_results['f1'],
-                'train/epoch_loss': training_loss.avg,
-            }, step=global_step)
+
+        assert len(val_results['per_class_accuracy']) == num_classes
+        maybe_log_eval_results(
+            eval_results=val_results,
+            epoch=epoch,
+            prefix='val',
+            class_names=class_names,
+            wandb_run=wandb_run,
+        )
 
         # saving checkpoint
         checkpoint_path = os.path.join(
@@ -336,7 +371,6 @@ def train_model(args: argparse.Namespace) -> None:
             }, best_checkpoint_path)
             print(f'Best val accuracy so far: {best_val_accuracy:0.4f}')
 
-    # TODO: using gradient accumulation
     # TODO: acc with mixup&cutmix
     # TODO: acc@k
 
@@ -346,12 +380,13 @@ class EvalResults(TypedDict):
     precision: float
     recall: float
     f1: float
+    per_class_accuracy: list[float]
 
 def eval_model(
     model: nn.Module,
     eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
     device: torch.device,
-    criterion,
+    num_classes: int | None = None,
     autocast_context=None,
 ) -> EvalResults:
     if autocast_context is None:
@@ -371,10 +406,10 @@ def eval_model(
             labels = labels.to(device)
 
             with autocast_context:
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+                logits = model(images)
+                loss = Fun.cross_entropy(input=logits, target=labels)
 
-            preds = outputs.argmax(dim=1)
+            preds = logits.argmax(dim=1)
 
             all_preds.extend(preds.detach().cpu().numpy())
             all_labels.extend(labels.detach().cpu().numpy())
@@ -397,6 +432,12 @@ def eval_model(
         average='macro',
         zero_division=0,  # pyright: ignore[reportArgumentType]
     )
+    conf_matrix = confusion_matrix(
+        y_true=all_labels,
+        y_pred=all_preds,
+        labels=list(range(num_classes)) if num_classes is not None else None,
+    )
+    per_class_accuracy = conf_matrix.diagonal() / conf_matrix.sum(axis=1)
 
     return {
         'loss': eval_loss.avg,
@@ -404,8 +445,35 @@ def eval_model(
         'precision': float(eval_precision),
         'recall': float(eval_recall),
         'f1': float(eval_f1),
+        'per_class_accuracy': per_class_accuracy.tolist(),
     }
 
+def maybe_log_eval_results(
+    eval_results: EvalResults,
+    epoch: int,
+    prefix: str = 'val',
+    class_names: list[str] | None = None,
+    wandb_run: WandbRun | None = None,
+) -> None:
+    if wandb_run is None:
+        return
+
+    num_classes = len(eval_results['per_class_accuracy'])
+    if class_names is None:
+        class_names = [f'class_{i}' for i in range(num_classes)]
+
+    log_data = {
+        f'{prefix}/loss': eval_results["loss"],
+        f'{prefix}/accuracy': eval_results['accuracy'],
+        f'{prefix}/precision': eval_results['precision'],
+        f'{prefix}/recall': eval_results['recall'],
+        f'{prefix}/f1': eval_results['f1'],
+        'epoch': epoch + 1,
+    }
+    for i, class_name in enumerate(class_names):
+        log_data[f'{prefix}/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
+
+    wandb_run.log(log_data)
 
 def main():
     parser = argparse.ArgumentParser(
