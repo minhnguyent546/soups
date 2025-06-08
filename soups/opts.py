@@ -14,7 +14,7 @@ def add_general_opts(parser: argparse.ArgumentParser) -> None:
         '--model',
         type=str,
         help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
-        default='coatnet_0_rw_224.sw_in1k',
+        default='timm/coatnet_0_rw_224.sw_in1k',
     )
     group.add_argument(
         '--dataset_dir',
