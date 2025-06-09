@@ -146,34 +146,32 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # creating model
-    if args.model == 'resnet50' or args.model == 'densenet121':
-        if args.model == 'resnet50':
-            model = torchvision.models.resnet50(
-                weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
-            )
-            model.fc = nn.Linear(model.fc.in_features, num_classes)
-            nn.init.xavier_uniform_(model.fc.weight)
-            if model.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-                nn.init.zeros_(model.fc.bias)
-        else:
-            model = torchvision.models.densenet121(
-                weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
-            )
-            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-            nn.init.xavier_uniform_(model.classifier.weight)
-            if model.classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-                nn.init.zeros_(model.classifier.bias)
+    if args.model == 'resnet50':
+        model = torchvision.models.resnet50(
+            weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
+        )
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        model_classifier = model.fc
+    elif args.model == 'densenet121':
+        model = torchvision.models.densenet121(
+            weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
+        )
+        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+        model_classifier = model.classifier
     elif args.model.startswith('timm/'):
         model = timm.create_model(
             args.model[5:],
             pretrained=True,
             num_classes=num_classes,
         )
-        nn.init.xavier_uniform_(model.head.fc.weight)
-        if model.head.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-            nn.init.zeros_(model.head.fc.bias)
+        model_classifier = model.head.fc
     else:
         raise ValueError(f'Unsupported model: {args.model}')
+
+    # initializing classification head
+    nn.init.xavier_uniform_(model_classifier.weight)
+    if model_classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+        nn.init.zeros_(model_classifier.bias)
 
     model.to(device)
     if args.from_checkpoint is not None:
