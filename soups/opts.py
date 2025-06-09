@@ -2,7 +2,15 @@ import argparse
 import os
 
 
-def add_general_opts(parser: argparse.ArgumentParser) -> None:
+def add_train_opts(parser: argparse.ArgumentParser) -> None:
+    """
+    All options used for training the model.
+    """
+    _add_general_opts(parser)
+    _add_training_opts(parser)
+    _add_wandb_opts(parser)
+
+def _add_general_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('General')
     group.add_argument(
         '--seed',
@@ -29,7 +37,7 @@ def add_general_opts(parser: argparse.ArgumentParser) -> None:
         default=224,
     )
 
-def add_training_opts(parser: argparse.ArgumentParser) -> None:
+def _add_training_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Training')
 
     # test only mode
@@ -163,7 +171,7 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         default=0.0,
     )
 
-def add_wandb_opts(parser: argparse.ArgumentParser) -> None:
+def _add_wandb_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Wandb')
     group.add_argument(
         '--wandb_logging',

@@ -24,8 +24,8 @@ from torch.utils.data import default_collate
 from tqdm.autonotebook import tqdm
 from wandb.sdk.wandb_run import Run as WandbRun
 
-import soups.opts as opts
 import soups.utils as utils
+from soups.opts import add_train_opts
 from soups.utils.metric import AverageMeter
 
 
@@ -478,9 +478,7 @@ def main():
         description='Training model',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    opts.add_general_opts(parser)
-    opts.add_training_opts(parser)
-    opts.add_wandb_opts(parser)
+    add_train_opts(parser);
     args = parser.parse_args()
 
     train_model(args)
