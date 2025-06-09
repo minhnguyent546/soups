@@ -2,9 +2,7 @@ import argparse
 import os
 from datetime import datetime
 
-import timm
 import torch
-import torch.nn as nn
 import torch.nn.functional as Fun
 import torchvision
 import torchvision.transforms.v2 as v2
@@ -22,6 +20,7 @@ from soups.opts import add_train_opts
 from soups.utils.metric import AverageMeter
 from soups.utils.training import (
     eval_model,
+    make_model,
     maybe_log_eval_results,
     print_eval_results,
 )
@@ -43,9 +42,8 @@ def train_model(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # loading dataset
-    image_size = args.image_size
     train_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(image_size, image_size)),
+        torchvision.transforms.Resize(size=(224, 224)),
         torchvision.transforms.RandomHorizontalFlip(p=0.5),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(
@@ -54,7 +52,7 @@ def train_model(args: argparse.Namespace) -> None:
         ),
     ])
     eval_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(image_size, image_size)),
+        torchvision.transforms.Resize(size=(224, 224)),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
@@ -144,34 +142,9 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # creating model
-    if args.model == 'resnet50':
-        model = torchvision.models.resnet50(
-            weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
-        )
-        model.fc = nn.Linear(model.fc.in_features, num_classes)
-        model_classifier = model.fc
-    elif args.model == 'densenet121':
-        model = torchvision.models.densenet121(
-            weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
-        )
-        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-        model_classifier = model.classifier
-    elif args.model.startswith('timm/'):
-        model = timm.create_model(
-            args.model[5:],
-            pretrained=True,
-            num_classes=num_classes,
-        )
-        model_classifier = model.head.fc
-    else:
-        raise ValueError(f'Unsupported model: {args.model}')
-
-    # initializing classification head
-    nn.init.xavier_uniform_(model_classifier.weight)
-    if model_classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-        nn.init.zeros_(model_classifier.bias)
-
+    model = make_model(args.model, num_classes=num_classes)
     model.to(device)
+
     if args.from_checkpoint is not None:
         logger.info(f'Loading model from checkpoint: {args.from_checkpoint}')
         checkpoint = torch.load(args.from_checkpoint, map_location=device)
@@ -326,7 +299,7 @@ def train_model(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        print_eval_results(eval_results=val_results, epoch=epoch, prefix='val')
+        print_eval_results(eval_results=val_results, prefix='val', epoch=epoch + 1)
 
         assert len(val_results['per_class_accuracy']) == num_classes
         maybe_log_eval_results(
@@ -344,7 +317,7 @@ def train_model(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        print_eval_results(eval_results=test_results, epoch=epoch, prefix='test')
+        print_eval_results(eval_results=test_results, prefix='test', epoch=epoch + 1)
 
         assert len(test_results['per_class_accuracy']) == num_classes
         maybe_log_eval_results(
@@ -379,16 +352,12 @@ def train_model(args: argparse.Namespace) -> None:
             }, best_checkpoint_path)
             print(f'Best val accuracy so far: {best_val_accuracy:0.4f}')
 
-    # TODO: acc with mixup&cutmix
-    # TODO: acc@k
-
-
 def main():
     parser = argparse.ArgumentParser(
         description='Training model',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    add_train_opts(parser);
+    add_train_opts(parser)
     args = parser.parse_args()
 
     train_model(args)

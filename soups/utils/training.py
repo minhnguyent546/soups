@@ -1,9 +1,11 @@
 from contextlib import nullcontext
 from typing import TypedDict
 
+import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as Fun
+import torchvision
 from sklearn.metrics import (
     confusion_matrix,
     precision_recall_fscore_support,
@@ -22,6 +24,37 @@ class EvalResults(TypedDict):
     recall: float
     f1: float
     per_class_accuracy: list[float]
+
+def make_model(model_name: str, num_classes: int) -> nn.Module:
+    model_name = model_name.lower()
+    if model_name == 'resnet50':
+        model = torchvision.models.resnet50(
+            weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
+        )
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        model_classifier = model.fc
+    elif model_name == 'densenet121':
+        model = torchvision.models.densenet121(
+            weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
+        )
+        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+        model_classifier = model.classifier
+    elif model_name.startswith('timm/'):
+        model = timm.create_model(
+            model_name[len('timm/'):],
+            pretrained=True,
+            num_classes=num_classes,
+        )
+        model_classifier = model.head.fc
+    else:
+        raise ValueError(f'Unsupported model: {model_name}')
+
+    # initializing classification head
+    nn.init.xavier_uniform_(model_classifier.weight)
+    if model_classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+        nn.init.zeros_(model_classifier.bias)
+
+    return model
 
 def eval_model(
     model: nn.Module,
@@ -118,11 +151,16 @@ def maybe_log_eval_results(
 
 def print_eval_results(
     eval_results: EvalResults,
-    epoch: int,
     prefix: str,  # either 'val' or 'test'
+    epoch: int | None = None,
 ) -> None:
+    if epoch is None:
+        print(f'{prefix} results: ', end='')
+    else:
+        print(f'{prefix} results on epoch {epoch + 1}: ', end='')
+
     print(
-        f'Epoch {epoch + 1}: {prefix}_loss {eval_results["loss"]:0.4f} | '
+        f'{prefix}_loss {eval_results["loss"]:0.4f} | '
         f'{prefix}_acc {eval_results["accuracy"]:0.4f} | '
         f'{prefix}_precision {eval_results["precision"]:0.4f} | '
         f'{prefix}_recall {eval_results["recall"]:0.4f} | '
