@@ -20,7 +20,11 @@ from tqdm.autonotebook import tqdm
 import soups.utils as utils
 from soups.opts import add_train_opts
 from soups.utils.metric import AverageMeter
-from soups.utils.training import eval_model, maybe_log_eval_results
+from soups.utils.training import (
+    eval_model,
+    maybe_log_eval_results,
+    print_eval_results,
+)
 
 
 def train_model(args: argparse.Namespace) -> None:
@@ -322,19 +326,31 @@ def train_model(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        print(
-            f'Epoch {epoch + 1}: val_loss {val_results["loss"]:0.4f} | '
-            f'val_acc {val_results["accuracy"]:0.4f} | '
-            f'val_precision {val_results["precision"]:0.4f} | '
-            f'val_recall {val_results["recall"]:0.4f} | '
-            f'val_f1 {val_results["f1"]:0.4f}'
-        )
+        print_eval_results(eval_results=val_results, epoch=epoch, prefix='val')
 
         assert len(val_results['per_class_accuracy']) == num_classes
         maybe_log_eval_results(
             eval_results=val_results,
             epoch=epoch,
             prefix='val',
+            class_names=class_names,
+            wandb_run=wandb_run,
+        )
+
+        # testing
+        test_results = eval_model(
+            model=model_ema.module if model_ema is not None else model,
+            eval_data_loader=test_data_loader,
+            device=device,
+            num_classes=num_classes,
+        )
+        print_eval_results(eval_results=test_results, epoch=epoch, prefix='test')
+
+        assert len(test_results['per_class_accuracy']) == num_classes
+        maybe_log_eval_results(
+            eval_results=test_results,
+            epoch=epoch,
+            prefix='test',
             class_names=class_names,
             wandb_run=wandb_run,
         )

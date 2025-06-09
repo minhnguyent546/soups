@@ -115,3 +115,16 @@ def maybe_log_eval_results(
         log_data[f'{prefix}/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
 
     wandb_run.log(log_data)
+
+def print_eval_results(
+    eval_results: EvalResults,
+    epoch: int,
+    prefix: str,  # either 'val' or 'test'
+) -> None:
+    print(
+        f'Epoch {epoch + 1}: {prefix}_loss {eval_results["loss"]:0.4f} | '
+        f'{prefix}_acc {eval_results["accuracy"]:0.4f} | '
+        f'{prefix}_precision {eval_results["precision"]:0.4f} | '
+        f'{prefix}_recall {eval_results["recall"]:0.4f} | '
+        f'{prefix}_f1 {eval_results["f1"]:0.4f}'
+    )
