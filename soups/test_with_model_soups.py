@@ -26,7 +26,11 @@ class Candidate:
     eval_results: EvalResults
 
 def test_with_model_soups(args: argparse.Namespace) -> None:
-    os.makedirs(args.output_dir, exist_ok=True)
+    if os.path.isdir(args.output_dir):
+        logger.error(f'Output directory already exists: {args.output_dir}')
+        exit(1)
+
+    os.makedirs(args.output_dir)
     log_file_path = os.path.join(args.output_dir, 'test_with_model_soups.log')
     init_logger(log_file=log_file_path, compact=True)
 
