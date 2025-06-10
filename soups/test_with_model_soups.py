@@ -2,17 +2,19 @@
 
 import argparse
 import os
+import json
 from dataclasses import dataclass
 
 import torch
 import torchvision
-from loguru import logger
 from torch.utils.data import DataLoader
 
 import soups.utils as utils
 from soups.opts import add_test_with_model_soups_opts
+from soups.utils.logger import logger, init_logger
 from soups.utils.training import (
     eval_model,
+    EvalResults,
     make_model,
     print_eval_results,
 )
@@ -21,9 +23,13 @@ from soups.utils.training import (
 @dataclass
 class Candidate:
     model_path: str
-    val_accuracy: float
+    eval_results: EvalResults
 
 def test_with_model_soups(args: argparse.Namespace) -> None:
+    os.makedirs(args.output_dir, exist_ok=True)
+    log_file_path = os.path.join(args.output_dir, 'test_with_model_soups.log')
+    init_logger(log_file=log_file_path, compact=True)
+
     utils.set_seed(args.seed)
     logger.info(f'Using seed: {args.seed}')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -39,6 +45,9 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 for f in os.listdir(model_path) if f.endswith('.pth')
             )
     model_paths = list(set(model_paths))  # remove duplicates
+    if not model_paths:
+        logger.error('No model checkpoints found.')
+        exit(1)
     num_models = len(model_paths)
     logger.info(f'Found total {len(model_paths)} model checkpoints')
 
@@ -95,14 +104,21 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        candidates.append(Candidate(model_path, val_results['accuracy']))
+        candidates.append(Candidate(model_path, val_results))
         print_eval_results(val_results, prefix='val')
-
-    # TODO: logging to files
 
     # uniform soup (i.e. mixing all models together)
     if args.uniform_soup:
         logger.info('** Start cooking uniform soup **')
+        uniform_soup_result_file = os.path.join(
+            args.output_dir,
+            'uniform_soup_results.json',
+        )
+
+        result_data = {}
+        result_data['models'] = {}
+        for candidate in candidates:
+            result_data['models'][candidate.model_path] = candidate.eval_results
 
         uniform_soup_params = {}
         for i, model_path in enumerate(model_paths):
@@ -134,11 +150,32 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         print('** Uniform soup test results: **')
         print_eval_results(eval_results=test_results, prefix='test')
 
+        # save the results
+        result_data['uniform_soup'] = test_results
+        with open(uniform_soup_result_file, 'w') as f:
+            json.dump(result_data, f, indent=4)
+        logger.info(f'Uniform soup results saved to {uniform_soup_result_file}')
+
+        # save the soup model
+        uniform_soup_model_path = os.path.join(args.output_dir, 'uniform_soup.pth')
+        torch.save({
+            'model_state_dict': uniform_soup_params,
+            'test_results': test_results,
+        }, uniform_soup_model_path)
+
     if args.greedy_soup:
         logger.info('** Start cooking greedy soup **')
-
+        greedy_soup_result_file = os.path.join(
+            args.output_dir,
+            'greedy_soup_results.json',
+        )
         # sort models by decreasing test accuracy
-        candidates = sorted(candidates, key=lambda item: item.val_accuracy, reverse=True)
+        candidates = sorted(candidates, key=lambda item: item.eval_results['accuracy'], reverse=True)
+
+        result_data = {}
+        result_data['models'] = {}
+        for candidate in candidates:
+            result_data['models'][candidate.model_path] = candidate.eval_results
 
         # start the soup by using the first ingredient.
         greedy_soup_ingredients = [candidates[0].model_path]
@@ -146,7 +183,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             candidates[0].model_path,
             map_location=device,
         )['model_state_dict']
-        best_val_acc_so_far = candidates[0].val_accuracy
+        best_val_acc_so_far = candidates[0].eval_results['accuracy']
 
         for i in range(1, num_models):
             logger.info(f'Trying model {candidates[i].model_path}')
@@ -184,6 +221,9 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 greedy_soup_params = potential_greedy_soup_params
                 logger.info(f'Added model {candidates[i].model_path} to greedy soup')
 
+        result_data['ingredients'] = greedy_soup_ingredients
+        result_data['best_val_accuracy'] = best_val_acc_so_far
+
         # test the final greedy soup
         print('** Greedy soup ingredients: **')
         for ingredient in greedy_soup_ingredients:
@@ -203,6 +243,18 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         print('** Greedy soup test results: **')
         print_eval_results(eval_results=test_results, prefix='test')
 
+        # save the results
+        result_data['greedy_soup'] = test_results
+        with open(greedy_soup_result_file, 'w') as f:
+            json.dump(result_data, f, indent=4)
+        logger.info(f'Uniform soup results saved to {greedy_soup_result_file}')
+
+        # save the soup model
+        greedy_soup_model_path = os.path.join(args.output_dir, 'greedy_soup.pth')
+        torch.save({
+            'model_state_dict': greedy_soup_params,
+            'test_results': test_results,
+        }, greedy_soup_model_path)
 
 def main():
     parser = argparse.ArgumentParser(

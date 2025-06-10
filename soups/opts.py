@@ -56,6 +56,12 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         help='Batch size for evaluation',
         default=16,
     )
+    parser.add_argument(
+        '--output_dir',
+        type=str,
+        help='Directory to save the results',
+        default='./soups_results',
+    )
 
 def _add_general_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('General')

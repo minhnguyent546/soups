@@ -7,7 +7,6 @@ import torch.nn.functional as Fun
 import torchvision
 import torchvision.transforms.v2 as v2
 import wandb
-from loguru import logger
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
@@ -18,6 +17,7 @@ from tqdm.autonotebook import tqdm
 import soups.utils as utils
 from soups.opts import add_train_opts
 from soups.utils.metric import AverageMeter
+from soups.utils.logger import logger, init_logger
 from soups.utils.training import (
     eval_model,
     make_model,
@@ -27,6 +27,7 @@ from soups.utils.training import (
 
 
 def train_model(args: argparse.Namespace) -> None:
+    init_logger()
     utils.set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
