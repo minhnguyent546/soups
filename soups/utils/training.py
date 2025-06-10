@@ -157,7 +157,7 @@ def print_eval_results(
     if epoch is None:
         print(f'{prefix} results: ', end='')
     else:
-        print(f'{prefix} results on epoch {epoch + 1}: ', end='')
+        print(f'{prefix} results on epoch {epoch}: ', end='')
 
     print(
         f'{prefix}_loss {eval_results["loss"]:0.4f} | '
