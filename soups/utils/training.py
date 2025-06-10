@@ -128,10 +128,12 @@ def maybe_log_eval_results(
     prefix: str = 'val',
     class_names: list[str] | None = None,
     wandb_run: WandbRun | None = None,
+    wandb_log_step: int | None = None,
 ) -> None:
     if wandb_run is None:
         return
 
+    assert wandb_log_step is not None
     num_classes = len(eval_results['per_class_accuracy'])
     if class_names is None:
         class_names = [f'class_{i}' for i in range(num_classes)]
@@ -147,7 +149,7 @@ def maybe_log_eval_results(
     for i, class_name in enumerate(class_names):
         log_data[f'{prefix}/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
 
-    wandb_run.log(log_data)
+    wandb_run.log(log_data, step=wandb_log_step)
 
 def print_eval_results(
     eval_results: EvalResults,

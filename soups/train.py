@@ -164,6 +164,7 @@ def train_model(args: argparse.Namespace) -> None:
             resume='must' if args.wandb_resume_id is not None else None,
         )
         wandb_run.define_metric(name='val/*', step_metric='epoch')
+        wandb_run.define_metric(name='test/*', step_metric='epoch')
         wandb_run.define_metric(name='train/epoch_loss', step_metric='epoch')
     if not args.run_test_only:
         utils.save_metadata_to_checkpoint(
@@ -309,6 +310,7 @@ def train_model(args: argparse.Namespace) -> None:
             prefix='val',
             class_names=class_names,
             wandb_run=wandb_run,
+            wandb_log_step=global_step,
         )
 
         # testing
@@ -327,6 +329,7 @@ def train_model(args: argparse.Namespace) -> None:
             prefix='test',
             class_names=class_names,
             wandb_run=wandb_run,
+            wandb_log_step=global_step,
         )
 
         # saving checkpoint
