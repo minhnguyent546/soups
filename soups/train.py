@@ -16,8 +16,13 @@ from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
 from soups.opts import add_train_opts
+from soups.thirdparty.sam import SAM
+from soups.utils.bypass_bn import (
+    disable_running_stats,
+    enable_running_stats,
+)
+from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
-from soups.utils.logger import logger, init_logger
 from soups.utils.training import (
     eval_model,
     make_model,
@@ -142,6 +147,11 @@ def train_model(args: argparse.Namespace) -> None:
         device=device.type, enabled=(mp_dtype == torch.float16),
     )
 
+    if (args.use_sam or args.use_asam) and scaler.is_enabled():
+        raise ValueError(
+            'SAM/ASAM and mixed precision that required scaling (e.g. fp16) are not compatible. '
+        )
+
     # creating model
     model = make_model(args.model, num_classes=num_classes)
     model.to(device)
@@ -166,6 +176,7 @@ def train_model(args: argparse.Namespace) -> None:
         wandb_run.define_metric(name='val/*', step_metric='epoch')
         wandb_run.define_metric(name='test/*', step_metric='epoch')
         wandb_run.define_metric(name='train/epoch_loss', step_metric='epoch')
+
     if not args.run_test_only:
         utils.save_metadata_to_checkpoint(
             checkpoint_dir=checkpoint_dir,
@@ -177,13 +188,29 @@ def train_model(args: argparse.Namespace) -> None:
     logger.info(f'Using model: {args.model}')
     logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
 
-    optimizer = AdamW(
+    base_optimizer = AdamW(
         model.parameters(),
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
+    sam_or_asam_enabled = args.use_sam or args.use_asam
+    if args.use_sam:
+        optimizer = SAM(
+            params=model.parameters(),
+            base_optimizer=base_optimizer,
+            rho=args.sam_rho,
+        )
+    elif args.use_asam:
+        optimizer = SAM(
+            params=model.parameters(),
+            base_optimizer=base_optimizer,
+            rho=args.sam_rho,
+            adaptive=True,
+        )
+    else:
+        optimizer = base_optimizer
     scheduler = CosineAnnealingWarmRestarts(
-        optimizer=optimizer,
+        optimizer=base_optimizer,  # see why we use base_optimizer here: https://github.com/davda54/sam/tree/3c3afdbd71cff2462ec91c734b3d1170bd0f3707?tab=readme-ov-file#:~:text=LR%20scheduling,closure)
         T_0=args.scheduler_T_0,
         T_mult=args.scheduler_T_mult,
         eta_min=args.min_lr,
@@ -252,6 +279,10 @@ def train_model(args: argparse.Namespace) -> None:
             num_batches = len(batches)  # actual number batches retrieved
 
             batch_loss: float = 0.0
+
+            if sam_or_asam_enabled:
+                enable_running_stats(model)  # <- this is the important line
+
             for images, labels in batches:
                 images = images.to(device)
                 labels = labels.to(device)
@@ -271,9 +302,30 @@ def train_model(args: argparse.Namespace) -> None:
                     model.parameters(), max_norm=args.max_grad_norm, norm_type=2,
                 )
 
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad()
+            if sam_or_asam_enabled:
+                assert not scaler.is_enabled()  # just double check to make sure
+                optimizer.first_step(zero_grad=True)
+
+                # second forward pass
+                disable_running_stats(model)  # <- this is the important line
+
+                for images, labels in batches:
+                    images = images.to(device)
+                    labels = labels.to(device)
+
+                    with autocast_context:
+                        logits = model(images)
+                        loss = Fun.cross_entropy(input=logits, target=labels, reduction='sum')
+                        if num_items_in_batch > 0:
+                            loss = loss / num_items_in_batch
+
+                    loss.backward()
+
+                optimizer.second_step(zero_grad=True)
+            else:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
 
             if model_ema is not None:
                 model_ema.update(model)
