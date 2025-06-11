@@ -200,6 +200,7 @@ def train_model(args: argparse.Namespace) -> None:
             rho=args.sam_rho,
             **optim_kwargs,
         )
+        logger.info('SAM enabled')
     elif args.use_asam:
         optimizer = SAM(
             params=model.parameters(),
@@ -208,6 +209,7 @@ def train_model(args: argparse.Namespace) -> None:
             adaptive=True,
             **optim_kwargs,
         )
+        logger.info('ASAM enabled')
     else:
         optimizer = AdamW(**optim_kwargs)
     scheduler = CosineAnnealingWarmRestarts(
