@@ -1,4 +1,5 @@
 import argparse
+import heapq
 import os
 from datetime import datetime
 
@@ -231,7 +232,7 @@ def train_model(args: argparse.Namespace) -> None:
 
     # results for each metric will be sorted in decreasing order
     best_val_results: dict[str, list[float]] = {
-        metric: [0.0] * args.save_best_k
+        metric: []
         for metric in args.best_checkpoint_metrics
     }
 
@@ -353,17 +354,21 @@ def train_model(args: argparse.Namespace) -> None:
         }, checkpoint_path)
 
         # saving checkpoint with best validation metric
-        for k in range(args.save_best_k):
-            for metric in args.best_checkpoint_metrics:
-                if val_results[metric] > best_val_results[metric][k]:
-                    best_val_results[metric][k] = val_results[metric]
-                    best_checkpoint_path = os.path.join(checkpoint_dir, f'model_best_{k + 1}_val_{metric}.pth')
-                    torch.save({
-                        'model_state_dict': model.state_dict(),
-                        'val_results': val_results,
-                        'epoch': epoch,
-                        'global_step': global_step,
-                    }, best_checkpoint_path)
+        for metric in args.best_checkpoint_metrics:
+            if len(best_val_results[metric]) < args.save_best_k or val_results[metric] > best_val_results[metric][0]:
+                if len(best_val_results[metric]) >= args.save_best_k:
+                    heapq.heappop(best_val_results[metric])
+                heapq.heappush(best_val_results[metric], val_results[metric])
+
+                # determine the value of k
+                k = len(best_val_results[metric]) - best_val_results[metric].index(val_results[metric])
+                best_checkpoint_path = os.path.join(checkpoint_dir, f'model_best_{k}_val_{metric}.pth')
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'val_results': val_results,
+                    'epoch': epoch,
+                    'global_step': global_step,
+                }, best_checkpoint_path)
 
 def main():
     parser = argparse.ArgumentParser(
