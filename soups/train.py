@@ -16,8 +16,8 @@ from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
 from soups.opts import add_train_opts
+from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
-from soups.utils.logger import logger, init_logger
 from soups.utils.training import (
     eval_model,
     make_model,
@@ -31,6 +31,7 @@ def train_model(args: argparse.Namespace) -> None:
     utils.set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
+    checkpoint_dir = None
     if not args.run_test_only:
         checkpoint_dir = os.path.join(
             args.checkpoints_dir,
@@ -210,6 +211,8 @@ def train_model(args: argparse.Namespace) -> None:
 
         return
 
+    assert checkpoint_dir is not None
+
     model_ema = None
     if args.use_ema:
         model_ema = ModelEmaV3(
@@ -226,7 +229,12 @@ def train_model(args: argparse.Namespace) -> None:
     if args.max_grad_norm > 0:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
 
-    best_val_accuracy = 0.0
+    # results for each metric will be sorted in decreasing order
+    best_val_results: dict[str, list[float]] = {
+        metric: [0.0] * args.save_best_k
+        for metric in args.best_checkpoint_metrics
+    }
+
     for epoch in range(args.num_epochs):
         model.train()
 
@@ -344,17 +352,18 @@ def train_model(args: argparse.Namespace) -> None:
             'global_step': global_step,
         }, checkpoint_path)
 
-        # saving checkpoint with best validation accuracy
-        if val_results['accuracy'] > best_val_accuracy:
-            best_val_accuracy = val_results['accuracy']
-            best_checkpoint_path = os.path.join(checkpoint_dir, 'model_best_val_acc.pth')
-            torch.save({
-                'model_state_dict': model.state_dict(),
-                'val_results': val_results,
-                'epoch': epoch,
-                'global_step': global_step,
-            }, best_checkpoint_path)
-            print(f'Best val accuracy so far: {best_val_accuracy:0.4f}')
+        # saving checkpoint with best validation metric
+        for k in range(args.save_best_k):
+            for metric in args.best_checkpoint_metrics:
+                if val_results[metric] > best_val_results[metric][k]:
+                    best_val_results[metric][k] = val_results[metric]
+                    best_checkpoint_path = os.path.join(checkpoint_dir, f'model_best_{k + 1}_val_{metric}.pth')
+                    torch.save({
+                        'model_state_dict': model.state_dict(),
+                        'val_results': val_results,
+                        'epoch': epoch,
+                        'global_step': global_step,
+                    }, best_checkpoint_path)
 
 def main():
     parser = argparse.ArgumentParser(
