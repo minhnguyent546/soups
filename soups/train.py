@@ -231,6 +231,8 @@ def train_model(args: argparse.Namespace) -> None:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
 
     # results for each metric will be sorted in decreasing order
+    if args.best_checkpoint_metrics is None:
+        args.best_checkpoint_metrics = []
     best_val_results: dict[str, list[float]] = {
         metric: []
         for metric in args.best_checkpoint_metrics
@@ -361,7 +363,8 @@ def train_model(args: argparse.Namespace) -> None:
                 heapq.heappush(best_val_results[metric], val_results[metric])
 
                 # determine the value of k
-                k = len(best_val_results[metric]) - best_val_results[metric].index(val_results[metric])
+                sorted_val_results = sorted(best_val_results[metric], reverse=True)
+                k = sorted_val_results.index(val_results[metric]) + 1
                 best_checkpoint_path = os.path.join(checkpoint_dir, f'model_best_{k}_val_{metric}.pth')
                 torch.save({
                     'model_state_dict': model.state_dict(),
