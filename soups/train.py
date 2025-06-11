@@ -188,29 +188,30 @@ def train_model(args: argparse.Namespace) -> None:
     logger.info(f'Using model: {args.model}')
     logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
 
-    base_optimizer = AdamW(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-    )
+    optim_kwargs = {
+        'lr': args.lr,
+        'weight_decay': args.weight_decay,
+    }
     sam_or_asam_enabled = args.use_sam or args.use_asam
     if args.use_sam:
         optimizer = SAM(
             params=model.parameters(),
-            base_optimizer=base_optimizer,
+            base_optimizer=AdamW,
             rho=args.sam_rho,
+            **optim_kwargs,
         )
     elif args.use_asam:
         optimizer = SAM(
             params=model.parameters(),
-            base_optimizer=base_optimizer,
+            base_optimizer=AdamW,
             rho=args.sam_rho,
             adaptive=True,
+            **optim_kwargs,
         )
     else:
-        optimizer = base_optimizer
+        optimizer = AdamW(**optim_kwargs)
     scheduler = CosineAnnealingWarmRestarts(
-        optimizer=base_optimizer,  # see why we use base_optimizer here: https://github.com/davda54/sam/tree/3c3afdbd71cff2462ec91c734b3d1170bd0f3707?tab=readme-ov-file#:~:text=LR%20scheduling,closure)
+        optimizer=optimizer.base_optimizer if sam_or_asam_enabled else optimizer,  # see why we use base_optimizer here: https://github.com/davda54/sam/tree/3c3afdbd71cff2462ec91c734b3d1170bd0f3707?tab=readme-ov-file#:~:text=LR%20scheduling,closure)
         T_0=args.scheduler_T_0,
         T_mult=args.scheduler_T_mult,
         eta_min=args.min_lr,
