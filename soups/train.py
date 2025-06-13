@@ -233,7 +233,9 @@ def train_model(args: argparse.Namespace) -> None:
     # results for each metric will be sorted in decreasing order
     if args.best_checkpoint_metrics is None:
         args.best_checkpoint_metrics = []
-    best_val_results: dict[str, list[float]] = {
+
+    # best_val_results[metric] = list of tuples (value, checkpoint_path)
+    best_val_results: dict[str, list[tuple[float, str]]] = {
         metric: []
         for metric in args.best_checkpoint_metrics
     }
@@ -355,23 +357,57 @@ def train_model(args: argparse.Namespace) -> None:
             'global_step': global_step,
         }, checkpoint_path)
 
-        # saving checkpoint with best validation metric
         for metric in args.best_checkpoint_metrics:
-            if len(best_val_results[metric]) < args.save_best_k or val_results[metric] > best_val_results[metric][0]:
-                if len(best_val_results[metric]) >= args.save_best_k:
-                    heapq.heappop(best_val_results[metric])
-                heapq.heappush(best_val_results[metric], val_results[metric])
+            current_metric_value = val_results[metric]
 
-                # determine the value of k
-                sorted_val_results = sorted(best_val_results[metric], reverse=True)
-                k = sorted_val_results.index(val_results[metric]) + 1
-                best_checkpoint_path = os.path.join(checkpoint_dir, f'model_best_{k}_val_{metric}.pth')
+            current_checkpoint_path = os.path.join(
+                checkpoint_dir,
+                f'model_epoch_{epoch}_{metric}_{current_metric_value:.4f}.pth',
+            )
+
+            if len(best_val_results[metric]) < args.save_best_k:
+                # If we haven't saved args.save_best_k checkpoints yet, just add this one.
+                # Store the actual positive metric value.
+                heapq.heappush(
+                    best_val_results[metric],
+                    (current_metric_value, current_checkpoint_path),
+                )
+
+                # Save the model state and other relevant information
                 torch.save({
                     'model_state_dict': model.state_dict(),
                     'val_results': val_results,
                     'epoch': epoch,
                     'global_step': global_step,
-                }, best_checkpoint_path)
+                }, current_checkpoint_path)
+                logger.info(f'Saved checkpoint for {metric}: {current_metric_value:.4f} to {current_checkpoint_path}')
+            else:
+                # If we already have args.save_best_k checkpoints, check if the current one is better than the worst of them.
+                # The worst of the k is at the top of the min-heap (best_val_results[metric][0]).
+                worst_of_k_value = best_val_results[metric][0][0] # This correctly gets the smallest (worst) value in the heap
+
+                if current_metric_value > worst_of_k_value:
+                    # Current checkpoint is better, so replace the worst one in the heap
+                    # heapq.heapreplace pops the smallest item and then pushes the new item
+                    old_worst_checkpoint_tuple = heapq.heapreplace(best_val_results[metric], (current_metric_value, current_checkpoint_path))
+                    old_worst_path = old_worst_checkpoint_tuple[1]
+
+                    # Delete the old worst checkpoint file from disk
+                    if os.path.exists(old_worst_path):
+                        os.remove(old_worst_path)
+                        print(f'Deleted old worst checkpoint: {old_worst_path}')
+
+                    # Save the new better checkpoint
+                    torch.save({
+                        'model_state_dict': model.state_dict(),
+                        'val_results': val_results,
+                        'epoch': epoch,
+                        'global_step': global_step,
+                    }, current_checkpoint_path)
+                    logger.info(
+                        f'Replaced checkpoint for {metric}: {current_metric_value:.4f} '
+                        f'(old worst: {worst_of_k_value:.4f}) to {current_checkpoint_path}',
+                    )
 
 def main():
     parser = argparse.ArgumentParser(

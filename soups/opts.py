@@ -216,7 +216,7 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         '--save_best_k',
         type=int,
-        help='Save upto `save_best_k` best checkpoints (do not use too large value as it can create a bottleneck in the training loop, recommended value is <= 3)',
+        help='Save upto `save_best_k` best checkpoints (do not use too large value as it can create a bottleneck in the training loop, recommended value is <= 5)',
         default=1,
     )
 
