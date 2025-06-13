@@ -1,4 +1,5 @@
 import argparse
+import heapq
 import os
 from datetime import datetime
 
@@ -16,8 +17,8 @@ from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
 from soups.opts import add_train_opts
+from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
-from soups.utils.logger import logger, init_logger
 from soups.utils.training import (
     eval_model,
     make_model,
@@ -31,6 +32,7 @@ def train_model(args: argparse.Namespace) -> None:
     utils.set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
+    checkpoint_dir = None
     if not args.run_test_only:
         checkpoint_dir = os.path.join(
             args.checkpoints_dir,
@@ -210,6 +212,8 @@ def train_model(args: argparse.Namespace) -> None:
 
         return
 
+    assert checkpoint_dir is not None
+
     model_ema = None
     if args.use_ema:
         model_ema = ModelEmaV3(
@@ -226,7 +230,16 @@ def train_model(args: argparse.Namespace) -> None:
     if args.max_grad_norm > 0:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
 
-    best_val_accuracy = 0.0
+    # results for each metric will be sorted in decreasing order
+    if args.best_checkpoint_metrics is None:
+        args.best_checkpoint_metrics = []
+
+    # best_val_results[metric] = list of tuples (value, checkpoint_path)
+    best_val_results: dict[str, list[tuple[float, str]]] = {
+        metric: []
+        for metric in args.best_checkpoint_metrics
+    }
+
     for epoch in range(args.num_epochs):
         model.train()
 
@@ -344,17 +357,57 @@ def train_model(args: argparse.Namespace) -> None:
             'global_step': global_step,
         }, checkpoint_path)
 
-        # saving checkpoint with best validation accuracy
-        if val_results['accuracy'] > best_val_accuracy:
-            best_val_accuracy = val_results['accuracy']
-            best_checkpoint_path = os.path.join(checkpoint_dir, 'model_best_val_acc.pth')
-            torch.save({
-                'model_state_dict': model.state_dict(),
-                'val_results': val_results,
-                'epoch': epoch,
-                'global_step': global_step,
-            }, best_checkpoint_path)
-            print(f'Best val accuracy so far: {best_val_accuracy:0.4f}')
+        for metric in args.best_checkpoint_metrics:
+            current_metric_value = val_results[metric]
+
+            current_checkpoint_path = os.path.join(
+                checkpoint_dir,
+                f'model_epoch_{epoch}_{metric}_{current_metric_value:.4f}.pth',
+            )
+
+            if len(best_val_results[metric]) < args.save_best_k:
+                # If we haven't saved args.save_best_k checkpoints yet, just add this one.
+                # Store the actual positive metric value.
+                heapq.heappush(
+                    best_val_results[metric],
+                    (current_metric_value, current_checkpoint_path),
+                )
+
+                # Save the model state and other relevant information
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'val_results': val_results,
+                    'epoch': epoch,
+                    'global_step': global_step,
+                }, current_checkpoint_path)
+                logger.info(f'Saved checkpoint for {metric}: {current_metric_value:.4f} to {current_checkpoint_path}')
+            else:
+                # If we already have args.save_best_k checkpoints, check if the current one is better than the worst of them.
+                # The worst of the k is at the top of the min-heap (best_val_results[metric][0]).
+                worst_of_k_value = best_val_results[metric][0][0] # This correctly gets the smallest (worst) value in the heap
+
+                if current_metric_value > worst_of_k_value:
+                    # Current checkpoint is better, so replace the worst one in the heap
+                    # heapq.heapreplace pops the smallest item and then pushes the new item
+                    old_worst_checkpoint_tuple = heapq.heapreplace(best_val_results[metric], (current_metric_value, current_checkpoint_path))
+                    old_worst_path = old_worst_checkpoint_tuple[1]
+
+                    # Delete the old worst checkpoint file from disk
+                    if os.path.exists(old_worst_path):
+                        os.remove(old_worst_path)
+                        print(f'Deleted old worst checkpoint: {old_worst_path}')
+
+                    # Save the new better checkpoint
+                    torch.save({
+                        'model_state_dict': model.state_dict(),
+                        'val_results': val_results,
+                        'epoch': epoch,
+                        'global_step': global_step,
+                    }, current_checkpoint_path)
+                    logger.info(
+                        f'Replaced checkpoint for {metric}: {current_metric_value:.4f} '
+                        f'(old worst: {worst_of_k_value:.4f}) to {current_checkpoint_path}',
+                    )
 
 def main():
     parser = argparse.ArgumentParser(
