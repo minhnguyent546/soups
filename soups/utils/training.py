@@ -10,7 +10,6 @@ from sklearn.metrics import (
     confusion_matrix,
     precision_recall_fscore_support,
 )
-from timm.layers.linear import Linear as TimmLinear
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm
 from wandb.sdk.wandb_run import Run as WandbRun
@@ -46,9 +45,9 @@ def make_model(model_name: str, num_classes: int) -> nn.Module:
             pretrained=True,
             num_classes=num_classes,
         )
-        if hasattr(model, 'head') and isinstance(model.head, TimmLinear):
+        if hasattr(model, 'head') and isinstance(model.head, nn.Linear):
             model_classifier = model.head
-        elif hasattr(model, 'head') and hasattr(model.head, 'fc') and isinstance(model.head.fc, TimmLinear):
+        elif hasattr(model, 'head') and hasattr(model.head, 'fc') and isinstance(model.head.fc, nn.Linear):
             model_classifier = model.head.fc
         else:
             raise ValueError(f'Unable to determine classification head for model {model_name}')
