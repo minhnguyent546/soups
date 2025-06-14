@@ -73,7 +73,6 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     ).to(device)
 
     test_data = {}
-    best_f1_so_far = 0.0
     best_results = None
     for checkpoint_path in checkpoint_paths:
         checkpoint_dict = torch.load(checkpoint_path, map_location=device)
@@ -99,17 +98,14 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 f'{test_results["per_class_accuracy"][i]:0.4f}'
             )
 
-        # choose the best checkpoint based on F1 score
-        if (
-            test_results['f1'] > best_f1_so_far or
-            (
-                test_results['f1'] == best_f1_so_far and
-                best_results is not None and
-                test_results['accuracy'] > best_results['accuracy']
-            )
+        # choose the best checkpoint based on (f1, accuracy) score
+        if best_results is None:
+            best_results = test_results
+        elif best_results['f1'] < test_results['f1'] or (
+            best_results['f1'] == test_results['f1'] and
+            best_results['accuracy'] < test_results['accuracy']
         ):
-            best_f1_so_far = test_results['f1']
-            best_results = test_data[checkpoint_path]
+            best_results = test_results
 
     if best_results is not None:
         test_data['best_results'] = {
