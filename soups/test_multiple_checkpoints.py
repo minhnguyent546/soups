@@ -101,9 +101,9 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         # choose the best checkpoint based on (f1, accuracy) score
         if best_results is None:
             best_results = test_results
-        elif best_results['f1'] < test_results['f1'] or (
-            best_results['f1'] == test_results['f1'] and
-            best_results['accuracy'] < test_results['accuracy']
+        elif round(best_results['f1'], 4) < round(test_results['f1'], 4) or (
+            round(best_results['f1'], 4) == round(test_results['f1'], 4) and
+            round(best_results['accuracy'], 4) < round(test_results['accuracy'], 4)
         ):
             best_results = test_results
 
