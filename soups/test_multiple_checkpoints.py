@@ -21,7 +21,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     if os.path.isfile(args.output_file):
         logger.error(f'Output file already exists: {args.output_file}')
         exit(1)
-    os.makedirs(os.path.dirname(args.output_file))
+    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
     init_logger(compact=True)
 
@@ -31,7 +31,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
     # find all model checkpoint files
     checkpoint_paths: list[str] = []
-    for checkpoint_path in args.checkpoints_dir:
+    for checkpoint_path in os.listdir(args.checkpoints_dir):
         checkpoint_path = os.path.join(args.checkpoints_dir, checkpoint_path)
         if os.path.isfile(checkpoint_path) and checkpoint_path.endswith('.pth'):
             checkpoint_paths.append(checkpoint_path)
@@ -73,6 +73,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     ).to(device)
 
     test_data = {}
+    best_f1_so_far = 0.0
+    best_results = None
     for checkpoint_path in checkpoint_paths:
         checkpoint_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint_dict['model_state_dict'])
@@ -85,17 +87,38 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             num_classes=num_classes,
         )
         test_data[checkpoint_path] = {
-            'loss': f'{test_results["loss"]:0.4f}\n',
-            'accuracy': f'{test_results["accuracy"]:0.4f}\n',
-            'precision': f'{test_results["precision"]:0.4f}\n',
-            'recall': f'{test_results["recall"]:0.4f}\n',
-            'f1': f'{test_results["f1"]:0.4f}\n',
+            'loss': f'{test_results["loss"]:0.4f}',
+            'accuracy': f'{test_results["accuracy"]:0.4f}',
+            'precision': f'{test_results["precision"]:0.4f}',
+            'recall': f'{test_results["recall"]:0.4f}',
+            'f1': f'{test_results["f1"]:0.4f}',
         }
         test_data[checkpoint_path]['per_class_accuracy'] = {}
         for i, class_name in enumerate(class_names):
             test_data[checkpoint_path]['per_class_accuracy'][class_name] = (
                 f'{test_results["per_class_accuracy"][i]:0.4f}'
             )
+
+        # choose the best checkpoint based on F1 score
+        if (
+            test_results['f1'] > best_f1_so_far or
+            (
+                test_results['f1'] == best_f1_so_far and
+                best_results is not None and
+                test_results['accuracy'] > best_results['accuracy']
+            )
+        ):
+            best_f1_so_far = test_results['f1']
+            best_results = test_data[checkpoint_path]
+
+    if best_results is not None:
+        test_data['best_results'] = {
+            'loss': f'{best_results["loss"]:0.4f}',
+            'accuracy': f'{best_results["accuracy"]:0.4f}',
+            'precision': f'{best_results["precision"]:0.4f}',
+            'recall': f'{best_results["recall"]:0.4f}',
+            'f1': f'{best_results["f1"]:0.4f}',
+        }
     with open(args.output_file, 'w') as f:
         json.dump(test_data, f, indent=4)
 
