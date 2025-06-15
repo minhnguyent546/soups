@@ -384,7 +384,7 @@ def train_model(args: argparse.Namespace) -> None:
             else:
                 # If we already have args.save_best_k checkpoints, check if the current one is better than the worst of them.
                 # The worst of the k is at the top of the min-heap (best_val_results[metric][0]).
-                worst_of_k_value = best_val_results[metric][0][0] # This correctly gets the smallest (worst) value in the heap
+                worst_of_k_value = best_val_results[metric][0][0]  # This correctly gets the smallest (worst) value in the heap
 
                 if current_metric_value > worst_of_k_value:
                     # Current checkpoint is better, so replace the worst one in the heap

@@ -200,7 +200,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             num_ingredients = len(greedy_soup_ingredients)
             potential_greedy_soup_params = {
                 k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1.)) +
-                    new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
+                new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
                 for k in new_ingredient_params
             }
 
