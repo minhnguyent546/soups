@@ -10,9 +10,15 @@ __pycache__
 # local stuff
 _*
 !__init__.py
+/checkpoints
+*.local
 
 # datasets
 /data
+
+# log files
+*.log
+*.logs
 
 # other
 /wandb
