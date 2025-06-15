@@ -22,7 +22,6 @@ dependencies = [
 ]
 
 [tool.autoflake]
-check = true
 in-place = true
 recursive = true
 expand-star-imports = true
