@@ -12,15 +12,11 @@ import torchvision
 import torchvision.transforms.v2 as v2
 import wandb
 from loguru import logger
-from sklearn.metrics import (
-    confusion_matrix,
-    precision_recall_fscore_support,
-)
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
-from torch.utils.data import DataLoader
-from torch.utils.data import default_collate
+from torch.utils.data import DataLoader, default_collate
 from tqdm.autonotebook import tqdm
 from wandb.sdk.wandb_run import Run as WandbRun
 

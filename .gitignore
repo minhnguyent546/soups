@@ -22,3 +22,6 @@ _*
 
 # other
 /wandb
+*.bak
+*.backup
+
