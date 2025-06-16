@@ -18,4 +18,23 @@ dependencies = [
     "torchvision>=0.22.1,<0.23.0",
     "wandb>=0.20.1",
     "pillow>=11.2.1",
+    "autoflake>=2.3.1",
+    "isort>=6.0.1",
+    "pyyaml>=6.0.2",
 ]
+
+[tool.autoflake]
+in-place = true
+recursive = true
+expand-star-imports = true
+remove-all-unused-imports = true
+ignore-init-module-imports = true
+remove-unused-variables = true
+
+[tool.isort]
+extend_skip = ["soups/thirdparty"]
+skip_gitignore = true
+multi_line_output = 3
+line_length = 88
+include_trailing_comma = true
+color_output = true
