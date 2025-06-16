@@ -1,11 +1,11 @@
 import argparse
 import os
 import random
-import yaml
 from typing import Any
 
 import numpy as np
 import torch
+import yaml
 from wandb.sdk.wandb_run import Run as WandbRun
 
 
