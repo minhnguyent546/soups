@@ -2,6 +2,9 @@
 exclude =
     .venv
     venv
+    soups/thirdparty  # thirdparty codes
+    soups/utils/bupass_bn.py  # thirdparty codes
+    soups/utils  # thirdparty codes
 extend-ignore = E501, E302
 max-line-length = 100
 per-file-ignores =
