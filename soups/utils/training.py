@@ -45,7 +45,12 @@ def make_model(model_name: str, num_classes: int) -> nn.Module:
             pretrained=True,
             num_classes=num_classes,
         )
-        model_classifier = model.head.fc
+        if hasattr(model, 'head') and isinstance(model.head, nn.Linear):
+            model_classifier = model.head
+        elif hasattr(model, 'head') and hasattr(model.head, 'fc') and isinstance(model.head.fc, nn.Linear):
+            model_classifier = model.head.fc
+        else:
+            raise ValueError(f'Unable to determine classification head for model {model_name}')
     else:
         raise ValueError(f'Unsupported model: {model_name}')
 
