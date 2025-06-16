@@ -2,7 +2,106 @@ import argparse
 import os
 
 
-def add_general_opts(parser: argparse.ArgumentParser) -> None:
+def add_train_opts(parser: argparse.ArgumentParser) -> None:
+    """
+    All options used for training the model.
+    """
+    _add_general_opts(parser)
+    _add_training_opts(parser)
+    _add_wandb_opts(parser)
+
+def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        '--seed',
+        type=int,
+        help='Seed',
+        default=42,
+    )
+    parser.add_argument(
+        '--checkpoint_path',
+        type=str,
+        nargs='+',
+        help=(
+            'Can be either a checkpoint file (.pth file) or a directory. '
+            'In case of a directory, all of the checkpoints in that directory '
+            'will be evaluated.'
+        ),
+        required=True,
+    )
+    parser.add_argument(
+        '--model',
+        type=str,
+        help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
+        default='timm/coatnet_0_rw_224.sw_in1k',
+    )
+    parser.add_argument(
+        '--uniform_soup',
+        action='store_true',
+        help='Whether to use uniform soups for model averaging',
+    )
+    parser.add_argument(
+        '--greedy_soup',
+        action='store_true',
+        help='Whether to use greedy soups for model averaging',
+    )
+    parser.add_argument(
+        '--dataset_dir',
+        type=str,
+        help='Path to the dataset (SHOULD be the SAME dataset used during training)',
+        default='./data/vietnamese_cultural_dataset',
+    )
+    parser.add_argument(
+        '--eval_batch_size',
+        type=int,
+        help='Batch size for evaluation',
+        default=16,
+    )
+    parser.add_argument(
+        '--output_dir',
+        type=str,
+        help='Directory to save the results',
+        default='./soups_results',
+    )
+
+def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        '--seed',
+        type=int,
+        help='Seed',
+        default=42,
+    )
+    parser.add_argument(
+        '--checkpoints_dir',
+        type=str,
+        help='Directory containing model checkpoints to evaluate',
+        required=True,
+    )
+    parser.add_argument(
+        '--model',
+        type=str,
+        help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
+        default='timm/coatnet_0_rw_224.sw_in1k',
+    )
+    parser.add_argument(
+        '--dataset_dir',
+        type=str,
+        help='Path to the dataset (SHOULD be the SAME dataset used during training)',
+        default='./data/vietnamese_cultural_dataset',
+    )
+    parser.add_argument(
+        '--eval_batch_size',
+        type=int,
+        help='Batch size for evaluation',
+        default=16,
+    )
+    parser.add_argument(
+        '--output_file',
+        type=str,
+        help='File to save the evaluation results (.json file)',
+        default='./test_results.json',
+    )
+
+def _add_general_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('General')
     group.add_argument(
         '--seed',
@@ -14,7 +113,7 @@ def add_general_opts(parser: argparse.ArgumentParser) -> None:
         '--model',
         type=str,
         help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
-        default='coatnet_0_rw_224.sw_in1k',
+        default='timm/coatnet_0_rw_224.sw_in1k',
     )
     group.add_argument(
         '--dataset_dir',
@@ -22,14 +121,8 @@ def add_general_opts(parser: argparse.ArgumentParser) -> None:
         help='Path to the dataset',
         default='./data/vietnamese_cultural_dataset',
     )
-    group.add_argument(
-        '--image_size',
-        type=int,
-        help='Image size for the model',
-        default=224,
-    )
 
-def add_training_opts(parser: argparse.ArgumentParser) -> None:
+def _add_training_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Training')
 
     # test only mode
@@ -150,6 +243,21 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to use warmup for Model EMA',
     )
 
+    # save best checkpoints
+    group.add_argument(
+        '--best_checkpoint_metrics',
+        type=str,
+        nargs='*',
+        choices=['accuracy', 'precision', 'recall', 'f1'],
+        help='Metric to use for saving the best checkpoint (based on validation results)',
+    )
+    group.add_argument(
+        '--save_best_k',
+        type=int,
+        help='Save upto `save_best_k` best checkpoints (do not use too large value as it can create a bottleneck in the training loop, recommended value is <= 5)',
+        default=1,
+    )
+
     # other
     group.add_argument(
         '--use_mixup_cutmix',
@@ -163,7 +271,7 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
         default=0.0,
     )
 
-def add_wandb_opts(parser: argparse.ArgumentParser) -> None:
+def _add_wandb_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Wandb')
     group.add_argument(
         '--wandb_logging',

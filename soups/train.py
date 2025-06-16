@@ -1,34 +1,37 @@
 import argparse
+import heapq
 import os
-from contextlib import nullcontext
 from datetime import datetime
-from typing import TypedDict
 
-import timm
 import torch
-import torch.nn as nn
 import torch.nn.functional as Fun
 import torchvision
 import torchvision.transforms.v2 as v2
 import wandb
-from loguru import logger
-from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader, default_collate
 from tqdm.autonotebook import tqdm
-from wandb.sdk.wandb_run import Run as WandbRun
 
-import soups.opts as opts
 import soups.utils as utils
+from soups.opts import add_train_opts
+from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
+from soups.utils.training import (
+    eval_model,
+    make_model,
+    maybe_log_eval_results,
+    print_eval_results,
+)
 
 
 def train_model(args: argparse.Namespace) -> None:
+    init_logger()
     utils.set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
 
+    checkpoint_dir = None
     if not args.run_test_only:
         checkpoint_dir = os.path.join(
             args.checkpoints_dir,
@@ -41,9 +44,8 @@ def train_model(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # loading dataset
-    image_size = args.image_size
     train_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(image_size, image_size)),
+        torchvision.transforms.Resize(size=(224, 224)),
         torchvision.transforms.RandomHorizontalFlip(p=0.5),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(
@@ -52,7 +54,7 @@ def train_model(args: argparse.Namespace) -> None:
         ),
     ])
     eval_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(image_size, image_size)),
+        torchvision.transforms.Resize(size=(224, 224)),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
@@ -142,36 +144,9 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # creating model
-    if args.model == 'resnet50' or args.model == 'densenet121':
-        if args.model == 'resnet50':
-            model = torchvision.models.resnet50(
-                weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
-            )
-            model.fc = nn.Linear(model.fc.in_features, num_classes)
-            nn.init.xavier_uniform_(model.fc.weight)
-            if model.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-                nn.init.zeros_(model.fc.bias)
-        else:
-            model = torchvision.models.densenet121(
-                weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
-            )
-            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-            nn.init.xavier_uniform_(model.classifier.weight)
-            if model.classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-                nn.init.zeros_(model.classifier.bias)
-    elif args.model.startswith('timm/'):
-        model = timm.create_model(
-            args.model[5:],
-            pretrained=True,
-            num_classes=num_classes,
-        )
-        nn.init.xavier_uniform_(model.head.fc.weight)
-        if model.head.fc.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-            nn.init.zeros_(model.head.fc.bias)
-    else:
-        raise ValueError(f'Unsupported model: {args.model}')
-
+    model = make_model(args.model, num_classes=num_classes)
     model.to(device)
+
     if args.from_checkpoint is not None:
         logger.info(f'Loading model from checkpoint: {args.from_checkpoint}')
         checkpoint = torch.load(args.from_checkpoint, map_location=device)
@@ -190,6 +165,7 @@ def train_model(args: argparse.Namespace) -> None:
             resume='must' if args.wandb_resume_id is not None else None,
         )
         wandb_run.define_metric(name='val/*', step_metric='epoch')
+        wandb_run.define_metric(name='test/*', step_metric='epoch')
         wandb_run.define_metric(name='train/epoch_loss', step_metric='epoch')
     if not args.run_test_only:
         utils.save_metadata_to_checkpoint(
@@ -235,6 +211,8 @@ def train_model(args: argparse.Namespace) -> None:
 
         return
 
+    assert checkpoint_dir is not None
+
     model_ema = None
     if args.use_ema:
         model_ema = ModelEmaV3(
@@ -251,7 +229,16 @@ def train_model(args: argparse.Namespace) -> None:
     if args.max_grad_norm > 0:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
 
-    best_val_accuracy = 0.0
+    # results for each metric will be sorted in decreasing order
+    if args.best_checkpoint_metrics is None:
+        args.best_checkpoint_metrics = []
+
+    # best_val_results[metric] = list of tuples (value, checkpoint_path)
+    best_val_results: dict[str, list[tuple[float, str]]] = {
+        metric: []
+        for metric in args.best_checkpoint_metrics
+    }
+
     for epoch in range(args.num_epochs):
         model.train()
 
@@ -326,13 +313,7 @@ def train_model(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        print(
-            f'Epoch {epoch + 1}: val_loss {val_results["loss"]:0.4f} | '
-            f'val_acc {val_results["accuracy"]:0.4f} | '
-            f'val_precision {val_results["precision"]:0.4f} | '
-            f'val_recall {val_results["recall"]:0.4f} | '
-            f'val_f1 {val_results["f1"]:0.4f}'
-        )
+        print_eval_results(eval_results=val_results, prefix='val', epoch=epoch + 1)
 
         assert len(val_results['per_class_accuracy']) == num_classes
         maybe_log_eval_results(
@@ -341,6 +322,26 @@ def train_model(args: argparse.Namespace) -> None:
             prefix='val',
             class_names=class_names,
             wandb_run=wandb_run,
+            wandb_log_step=global_step,
+        )
+
+        # testing
+        test_results = eval_model(
+            model=model_ema.module if model_ema is not None else model,
+            eval_data_loader=test_data_loader,
+            device=device,
+            num_classes=num_classes,
+        )
+        print_eval_results(eval_results=test_results, prefix='test', epoch=epoch + 1)
+
+        assert len(test_results['per_class_accuracy']) == num_classes
+        maybe_log_eval_results(
+            eval_results=test_results,
+            epoch=epoch,
+            prefix='test',
+            class_names=class_names,
+            wandb_run=wandb_run,
+            wandb_log_step=global_step,
         )
 
         # saving checkpoint
@@ -355,130 +356,64 @@ def train_model(args: argparse.Namespace) -> None:
             'global_step': global_step,
         }, checkpoint_path)
 
-        # saving checkpoint with best validation accuracy
-        if val_results['accuracy'] > best_val_accuracy:
-            best_val_accuracy = val_results['accuracy']
-            best_checkpoint_path = os.path.join(checkpoint_dir, 'model_best_val_acc.pth')
-            torch.save({
-                'model_state_dict': model.state_dict(),
-                'val_results': val_results,
-                'epoch': epoch,
-                'global_step': global_step,
-            }, best_checkpoint_path)
-            print(f'Best val accuracy so far: {best_val_accuracy:0.4f}')
+        for metric in args.best_checkpoint_metrics:
+            current_metric_value = val_results[metric]
 
-    # TODO: acc with mixup&cutmix
-    # TODO: acc@k
+            current_checkpoint_path = os.path.join(
+                checkpoint_dir,
+                f'model_epoch_{epoch}_{metric}_{current_metric_value:.4f}.pth',
+            )
 
-class EvalResults(TypedDict):
-    loss: float
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
-    per_class_accuracy: list[float]
+            if len(best_val_results[metric]) < args.save_best_k:
+                # If we haven't saved args.save_best_k checkpoints yet, just add this one.
+                # Store the actual positive metric value.
+                heapq.heappush(
+                    best_val_results[metric],
+                    (current_metric_value, current_checkpoint_path),
+                )
 
-def eval_model(
-    model: nn.Module,
-    eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
-    device: torch.device,
-    num_classes: int | None = None,
-    autocast_context=None,
-) -> EvalResults:
-    if autocast_context is None:
-        autocast_context = nullcontext()
+                # Save the model state and other relevant information
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'val_results': val_results,
+                    'epoch': epoch,
+                    'global_step': global_step,
+                }, current_checkpoint_path)
+                logger.info(f'Saved checkpoint for {metric}: {current_metric_value:.4f} to {current_checkpoint_path}')
+            else:
+                # If we already have args.save_best_k checkpoints, check if the current one is better than the worst of them.
+                # The worst of the k is at the top of the min-heap (best_val_results[metric][0]).
+                worst_of_k_value = best_val_results[metric][0][0]  # This correctly gets the smallest (worst) value in the heap
 
-    model_mode_before = model.training
-    model.eval()
+                if current_metric_value > worst_of_k_value:
+                    # Current checkpoint is better, so replace the worst one in the heap
+                    # heapq.heapreplace pops the smallest item and then pushes the new item
+                    old_worst_checkpoint_tuple = heapq.heapreplace(best_val_results[metric], (current_metric_value, current_checkpoint_path))
+                    old_worst_path = old_worst_checkpoint_tuple[1]
 
-    eval_iter = tqdm(eval_data_loader, desc='Evaluating model')
-    eval_loss = AverageMeter('eval_loss', fmt=':0.4f')
-    eval_accuracy = AverageMeter('eval_accuracy', fmt=':0.4f')
-    all_preds = []
-    all_labels = []
-    with torch.no_grad():
-        for images, labels in eval_iter:
-            images = images.to(device)
-            labels = labels.to(device)
+                    # Delete the old worst checkpoint file from disk
+                    if os.path.exists(old_worst_path):
+                        os.remove(old_worst_path)
+                        print(f'Deleted old worst checkpoint: {old_worst_path}')
 
-            with autocast_context:
-                logits = model(images)
-                loss = Fun.cross_entropy(input=logits, target=labels)
-
-            preds = logits.argmax(dim=1)
-
-            all_preds.extend(preds.detach().cpu().numpy())
-            all_labels.extend(labels.detach().cpu().numpy())
-            eval_loss.update(loss.item(), labels.shape[0])
-
-            num_corrects = (preds == labels).sum().item()
-            cur_accuracy = num_corrects / labels.shape[0]
-            eval_accuracy.update(cur_accuracy, labels.shape[0])
-
-            eval_iter.set_postfix({
-                'loss': f'{loss:0.4f}',
-            })
-
-    # set model back to the original mode
-    model.train(model_mode_before)
-
-    eval_precision, eval_recall, eval_f1, _ = precision_recall_fscore_support(
-        all_labels,
-        all_preds,
-        average='macro',
-        zero_division=0,  # pyright: ignore[reportArgumentType]
-    )
-    conf_matrix = confusion_matrix(
-        y_true=all_labels,
-        y_pred=all_preds,
-        labels=list(range(num_classes)) if num_classes is not None else None,
-    )
-    per_class_accuracy = conf_matrix.diagonal() / conf_matrix.sum(axis=1)
-
-    return {
-        'loss': eval_loss.avg,
-        'accuracy': eval_accuracy.avg,
-        'precision': float(eval_precision),
-        'recall': float(eval_recall),
-        'f1': float(eval_f1),
-        'per_class_accuracy': per_class_accuracy.tolist(),
-    }
-
-def maybe_log_eval_results(
-    eval_results: EvalResults,
-    epoch: int,
-    prefix: str = 'val',
-    class_names: list[str] | None = None,
-    wandb_run: WandbRun | None = None,
-) -> None:
-    if wandb_run is None:
-        return
-
-    num_classes = len(eval_results['per_class_accuracy'])
-    if class_names is None:
-        class_names = [f'class_{i}' for i in range(num_classes)]
-
-    log_data = {
-        f'{prefix}/loss': eval_results["loss"],
-        f'{prefix}/accuracy': eval_results['accuracy'],
-        f'{prefix}/precision': eval_results['precision'],
-        f'{prefix}/recall': eval_results['recall'],
-        f'{prefix}/f1': eval_results['f1'],
-        'epoch': epoch + 1,
-    }
-    for i, class_name in enumerate(class_names):
-        log_data[f'{prefix}/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
-
-    wandb_run.log(log_data)
+                    # Save the new better checkpoint
+                    torch.save({
+                        'model_state_dict': model.state_dict(),
+                        'val_results': val_results,
+                        'epoch': epoch,
+                        'global_step': global_step,
+                    }, current_checkpoint_path)
+                    logger.info(
+                        f'Replaced checkpoint for {metric}: {current_metric_value:.4f} '
+                        f'(old worst: {worst_of_k_value:.4f}) to {current_checkpoint_path}',
+                    )
 
 def main():
     parser = argparse.ArgumentParser(
         description='Training model',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    opts.add_general_opts(parser)
-    opts.add_training_opts(parser)
-    opts.add_wandb_opts(parser)
+    add_train_opts(parser)
     args = parser.parse_args()
 
     train_model(args)
