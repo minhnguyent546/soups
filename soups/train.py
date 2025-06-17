@@ -191,13 +191,13 @@ def train_model(args: argparse.Namespace) -> None:
     logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
 
     optim_kwargs = {
+        'params': model.parameters(),
         'lr': args.lr,
         'weight_decay': args.weight_decay,
     }
     sam_or_asam_enabled = args.use_sam or args.use_asam
     if args.use_sam:
         optimizer = SAM(
-            params=model.parameters(),
             base_optimizer=AdamW,
             rho=args.sam_rho,
             **optim_kwargs,
@@ -205,7 +205,6 @@ def train_model(args: argparse.Namespace) -> None:
         logger.info('SAM enabled')
     elif args.use_asam:
         optimizer = SAM(
-            params=model.parameters(),
             base_optimizer=AdamW,
             rho=args.sam_rho,
             adaptive=True,
