@@ -1,8 +1,8 @@
 """Run test with model soups"""
 
 import argparse
-import os
 import json
+import os
 from dataclasses import dataclass
 
 import torch
@@ -11,13 +11,8 @@ from torch.utils.data import DataLoader
 
 import soups.utils as utils
 from soups.opts import add_test_with_model_soups_opts
-from soups.utils.logger import logger, init_logger
-from soups.utils.training import (
-    eval_model,
-    EvalResults,
-    make_model,
-    print_eval_results,
-)
+from soups.utils.logger import init_logger, logger
+from soups.utils.training import EvalResults, eval_model, make_model, print_eval_results
 
 
 @dataclass

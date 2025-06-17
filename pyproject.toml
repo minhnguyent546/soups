@@ -5,22 +5,25 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "colorama>=0.4.6",
     "hf-transfer>=0.1.9",
     "huggingface-hub[cli]>=0.32.4",
     "loguru>=0.7.3",
     "requests>=2.32.3",
     "scikit-learn>=1.6.1",
-    "tabulate>=0.9.0",
     "timm>=1.0.15",
     "tqdm>=4.67.1",
     "torch>=2.7.1,<2.8.0",
     "torchvision>=0.22.1,<0.23.0",
     "wandb>=0.20.1",
     "pillow>=11.2.1",
-    "autoflake>=2.3.1",
-    "isort>=6.0.1",
     "pyyaml>=6.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "autoflake>=2.3.1",
+    "isort[colors]>=6.0.1",
+    "tabulate>=0.9.0",
 ]
 
 [tool.autoflake]
