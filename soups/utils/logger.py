@@ -21,17 +21,17 @@ def init_logger(
 ) -> None:
     if compact:
         fmt = (
-            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{module}:{line}</cyan> - "
-            "<level>{message}</level>"
+            '<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
+            '<level>{level: <8}</level> | '
+            '<cyan>{module}:{line}</cyan> - '
+            '<level>{message}</level>'
         )
     else:
         fmt = (
-            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{name}:{function}:{line}</cyan> - "
-            "<level>{message}</level>"
+            '<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
+            '<level>{level: <8}</level> | '
+            '<cyan>{name}:{function}:{line}</cyan> - '
+            '<level>{message}</level>'
         )
     logger.remove()
     logger.add(

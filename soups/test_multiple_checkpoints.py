@@ -102,8 +102,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         if best_results is None:
             best_results = test_results
         elif round(best_results['f1'], 4) < round(test_results['f1'], 4) or (
-            round(best_results['f1'], 4) == round(test_results['f1'], 4) and
-            round(best_results['accuracy'], 4) < round(test_results['accuracy'], 4)
+            round(best_results['f1'], 4) == round(test_results['f1'], 4)
+            and round(best_results['accuracy'], 4) < round(test_results['accuracy'], 4)
         ):
             best_results = test_results
 
@@ -119,6 +119,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         json.dump(test_data, f, indent=4)
 
     logger.info(f'Test results saved to {args.output_file}')
+
 
 def main():
     parser = argparse.ArgumentParser(

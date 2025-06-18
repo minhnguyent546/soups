@@ -140,7 +140,8 @@ def train_model(args: argparse.Namespace) -> None:
         enabled=(mp_dtype in (torch.float16, torch.bfloat16)),
     )
     scaler = torch.amp.grad_scaler.GradScaler(
-        device=device.type, enabled=(mp_dtype == torch.float16),
+        device=device.type,
+        enabled=(mp_dtype == torch.float16),
     )
 
     # creating model
@@ -235,8 +236,7 @@ def train_model(args: argparse.Namespace) -> None:
 
     # best_val_results[metric] = list of tuples (value, checkpoint_path)
     best_val_results: dict[str, list[tuple[float, str]]] = {
-        metric: []
-        for metric in args.best_checkpoint_metrics
+        metric: [] for metric in args.best_checkpoint_metrics
     }
 
     for epoch in range(args.num_epochs):
@@ -250,15 +250,24 @@ def train_model(args: argparse.Namespace) -> None:
 
         # determine the number of updates for the current epoch
         # based on gradient accumulation steps
-        total_updates = (total_num_samples + args.gradient_accum_steps - 1) // args.gradient_accum_steps  # ceil_div
+        total_updates = (
+            total_num_samples + args.gradient_accum_steps - 1
+        ) // args.gradient_accum_steps  # ceil_div
 
         train_progressbar = tqdm(
-            range(total_updates), desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
+            range(total_updates),
+            desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
         )
         for update_step in train_progressbar:
-            num_batches = args.gradient_accum_steps if update_step + 1 < total_updates else last_iter_num_batches
+            num_batches = (
+                args.gradient_accum_steps
+                if update_step + 1 < total_updates
+                else last_iter_num_batches
+            )
             batches, num_items_in_batch = utils.get_batch_samples(
-                data_iter=train_data_iter, num_batches=num_batches, labels_index=1,
+                data_iter=train_data_iter,
+                num_batches=num_batches,
+                labels_index=1,
             )
             assert num_items_in_batch is not None
             num_batches = len(batches)  # actual number batches retrieved
@@ -280,7 +289,9 @@ def train_model(args: argparse.Namespace) -> None:
             if args.max_grad_norm > 0:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), max_norm=args.max_grad_norm, norm_type=2,
+                    model.parameters(),
+                    max_norm=args.max_grad_norm,
+                    norm_type=2,
                 )
 
             scaler.step(optimizer)
@@ -301,9 +312,7 @@ def train_model(args: argparse.Namespace) -> None:
             scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
 
             training_loss.update(batch_loss, num_items_in_batch)
-            train_progressbar.set_postfix({
-                'loss': f'{batch_loss:0.4f}'
-            })
+            train_progressbar.set_postfix({'loss': f'{batch_loss:0.4f}'})
             global_step += 1
 
         # validation
@@ -349,12 +358,15 @@ def train_model(args: argparse.Namespace) -> None:
             checkpoint_dir,
             f'model_epoch_{epoch + 1}.pth',
         )
-        torch.save({
-            'model_state_dict': model.state_dict(),
-            'val_results': val_results,
-            'epoch': epoch,
-            'global_step': global_step,
-        }, checkpoint_path)
+        torch.save(
+            {
+                'model_state_dict': model.state_dict(),
+                'val_results': val_results,
+                'epoch': epoch,
+                'global_step': global_step,
+            },
+            checkpoint_path,
+        )
 
         for metric in args.best_checkpoint_metrics:
             current_metric_value = val_results[metric]
@@ -373,22 +385,31 @@ def train_model(args: argparse.Namespace) -> None:
                 )
 
                 # Save the model state and other relevant information
-                torch.save({
-                    'model_state_dict': model.state_dict(),
-                    'val_results': val_results,
-                    'epoch': epoch,
-                    'global_step': global_step,
-                }, current_checkpoint_path)
-                logger.info(f'Saved checkpoint for {metric}: {current_metric_value:.4f} to {current_checkpoint_path}')
+                torch.save(
+                    {
+                        'model_state_dict': model.state_dict(),
+                        'val_results': val_results,
+                        'epoch': epoch,
+                        'global_step': global_step,
+                    },
+                    current_checkpoint_path,
+                )
+                logger.info(
+                    f'Saved checkpoint for {metric}: {current_metric_value:.4f} to {current_checkpoint_path}'
+                )
             else:
                 # If we already have args.save_best_k checkpoints, check if the current one is better than the worst of them.
                 # The worst of the k is at the top of the min-heap (best_val_results[metric][0]).
-                worst_of_k_value = best_val_results[metric][0][0]  # This correctly gets the smallest (worst) value in the heap
+                worst_of_k_value = best_val_results[metric][0][
+                    0
+                ]  # This correctly gets the smallest (worst) value in the heap
 
                 if current_metric_value > worst_of_k_value:
                     # Current checkpoint is better, so replace the worst one in the heap
                     # heapq.heapreplace pops the smallest item and then pushes the new item
-                    old_worst_checkpoint_tuple = heapq.heapreplace(best_val_results[metric], (current_metric_value, current_checkpoint_path))
+                    old_worst_checkpoint_tuple = heapq.heapreplace(
+                        best_val_results[metric], (current_metric_value, current_checkpoint_path)
+                    )
                     old_worst_path = old_worst_checkpoint_tuple[1]
 
                     # Delete the old worst checkpoint file from disk
@@ -397,16 +418,20 @@ def train_model(args: argparse.Namespace) -> None:
                         print(f'Deleted old worst checkpoint: {old_worst_path}')
 
                     # Save the new better checkpoint
-                    torch.save({
-                        'model_state_dict': model.state_dict(),
-                        'val_results': val_results,
-                        'epoch': epoch,
-                        'global_step': global_step,
-                    }, current_checkpoint_path)
+                    torch.save(
+                        {
+                            'model_state_dict': model.state_dict(),
+                            'val_results': val_results,
+                            'epoch': epoch,
+                            'global_step': global_step,
+                        },
+                        current_checkpoint_path,
+                    )
                     logger.info(
                         f'Replaced checkpoint for {metric}: {current_metric_value:.4f} '
                         f'(old worst: {worst_of_k_value:.4f}) to {current_checkpoint_path}',
                     )
+
 
 def main():
     parser = argparse.ArgumentParser(

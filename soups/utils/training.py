@@ -22,6 +22,7 @@ class EvalResults(TypedDict):
     f1: float
     per_class_accuracy: list[float]
 
+
 def make_model(model_name: str, num_classes: int) -> nn.Module:
     model_name = model_name.lower()
     if model_name == 'resnet50':
@@ -38,13 +39,17 @@ def make_model(model_name: str, num_classes: int) -> nn.Module:
         model_classifier = model.classifier
     elif model_name.startswith('timm/'):
         model = timm.create_model(
-            model_name[len('timm/'):],
+            model_name[len('timm/') :],
             pretrained=True,
             num_classes=num_classes,
         )
         if hasattr(model, 'head') and isinstance(model.head, nn.Linear):
             model_classifier = model.head
-        elif hasattr(model, 'head') and hasattr(model.head, 'fc') and isinstance(model.head.fc, nn.Linear):
+        elif (
+            hasattr(model, 'head')
+            and hasattr(model.head, 'fc')
+            and isinstance(model.head.fc, nn.Linear)
+        ):
             model_classifier = model.head.fc
         else:
             raise ValueError(f'Unable to determine classification head for model {model_name}')
@@ -57,6 +62,7 @@ def make_model(model_name: str, num_classes: int) -> nn.Module:
         nn.init.zeros_(model_classifier.bias)
 
     return model
+
 
 def eval_model(
     model: nn.Module,
@@ -124,6 +130,7 @@ def eval_model(
         'per_class_accuracy': per_class_accuracy.tolist(),
     }
 
+
 def maybe_log_eval_results(
     eval_results: EvalResults,
     epoch: int,
@@ -141,7 +148,7 @@ def maybe_log_eval_results(
         class_names = [f'class_{i}' for i in range(num_classes)]
 
     log_data = {
-        f'{prefix}/loss': eval_results["loss"],
+        f'{prefix}/loss': eval_results['loss'],
         f'{prefix}/accuracy': eval_results['accuracy'],
         f'{prefix}/precision': eval_results['precision'],
         f'{prefix}/recall': eval_results['recall'],
@@ -152,6 +159,7 @@ def maybe_log_eval_results(
         log_data[f'{prefix}/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
 
     wandb_run.log(log_data, step=wandb_log_step)
+
 
 def print_eval_results(
     eval_results: EvalResults,
