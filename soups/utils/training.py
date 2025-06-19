@@ -21,6 +21,9 @@ class EvalResults(TypedDict):
     recall: float
     f1: float
     per_class_accuracy: list[float]
+    per_class_precision: list[float]
+    per_class_recall: list[float]
+    per_class_f1: list[float]
 
 def make_model(model_name: str, num_classes: int) -> nn.Module:
     model_name = model_name.lower()
@@ -62,7 +65,7 @@ def eval_model(
     model: nn.Module,
     eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
     device: torch.device,
-    num_classes: int | None = None,
+    num_classes: int,
     autocast_context=None,
 ) -> EvalResults:
     if autocast_context is None:
@@ -102,18 +105,32 @@ def eval_model(
     # set model back to the original mode
     model.train(model_mode_before)
 
+    # precision, recall, f1
+    label_names = list(range(num_classes))
     eval_precision, eval_recall, eval_f1, _ = precision_recall_fscore_support(
         all_labels,
         all_preds,
         average='macro',
         zero_division=0,  # pyright: ignore[reportArgumentType]
+        labels=label_names,
     )
+
+    # per class accuracy
     conf_matrix = confusion_matrix(
         y_true=all_labels,
         y_pred=all_preds,
-        labels=list(range(num_classes)) if num_classes is not None else None,
+        labels=label_names,
     )
     per_class_accuracy = conf_matrix.diagonal() / conf_matrix.sum(axis=1)
+
+    # per class precision, recall, f1
+    per_class_precision, per_class_recall, per_class_f1, _ = precision_recall_fscore_support(
+        y_true=all_labels,
+        y_pred=all_preds,
+        average=None,
+        zero_division=0,  # pyright: ignore[reportArgumentType]
+        labels=label_names,
+    )
 
     return {
         'loss': eval_loss.avg,
@@ -122,6 +139,9 @@ def eval_model(
         'recall': float(eval_recall),
         'f1': float(eval_f1),
         'per_class_accuracy': per_class_accuracy.tolist(),
+        'per_class_precision': per_class_precision.tolist(),  # pyright: ignore[reportAttributeAccessIssue]
+        'per_class_recall': per_class_recall.tolist(),  # pyright: ignore[reportAttributeAccessIssue]
+        'per_class_f1': per_class_f1.tolist(),  # pyright: ignore[reportAttributeAccessIssue]
     }
 
 def maybe_log_eval_results(
@@ -150,6 +170,8 @@ def maybe_log_eval_results(
     }
     for i, class_name in enumerate(class_names):
         log_data[f'{prefix}/{class_name}_accuracy'] = eval_results['per_class_accuracy'][i]
+        # TODO: we might want to log per class precision, recall, and f1 here also,
+        # but currently I think it is a bit messy.
 
     wandb_run.log(log_data, step=wandb_log_step)
 

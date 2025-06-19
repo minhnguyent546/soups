@@ -205,9 +205,14 @@ def train_model(args: argparse.Namespace) -> None:
             f'  Recall: {test_results["recall"]:0.4f}\n'
             f'  F1: {test_results["f1"]:0.4f}\n'
         )
-        print('  Per class accuracy:')
+        print('  Per class results (acc | pre | recall | f1):')
         for i, class_name in enumerate(class_names):
-            print(f'    {class_name}: {test_results["per_class_accuracy"][i]:0.4f}')
+            print(
+                f'    {class_name}: {test_results["per_class_accuracy"][i]:0.4f} |'
+                f'{test_results["per_class_precision"][i]:0.4f} |'
+                f'{test_results["per_class_recall"][i]:0.4f} |'
+                f'{test_results["per_class_f1"][i]:0.4f}'
+            )
 
         return
 

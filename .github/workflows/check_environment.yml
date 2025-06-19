@@ -27,5 +27,5 @@ jobs:
         run: |
           uv run python --version
           uv run python train.py --help
-          uv run python test_multiple_checkpoints.py --help
-          uv run python test_with_model_soups.py --help
+          uv run python run_test_multiple_checkpoints.py --help
+          uv run python run_test_with_model_soups.py --help
