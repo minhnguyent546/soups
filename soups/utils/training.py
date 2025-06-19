@@ -4,7 +4,6 @@ from typing import TypedDict
 import timm
 import torch
 import torch.nn as nn
-import torch.nn.functional as Fun
 import torchvision
 from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from torch.utils.data import DataLoader
@@ -64,6 +63,7 @@ def make_model(model_name: str, num_classes: int) -> nn.Module:
 def eval_model(
     model: nn.Module,
     eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
+    criterion: nn.Module,
     device: torch.device,
     num_classes: int,
     autocast_context=None,
@@ -83,10 +83,12 @@ def eval_model(
         for images, labels in eval_iter:
             images = images.to(device)
             labels = labels.to(device)
+            if labels.ndim == 1:
+                labels = labels.to(torch.int64)
 
             with autocast_context:
                 logits = model(images)
-                loss = Fun.cross_entropy(input=logits, target=labels)
+                loss = criterion(logits, labels)
 
             preds = logits.argmax(dim=1)
 

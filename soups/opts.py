@@ -175,6 +175,27 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Number of workers for data loading',
     )
 
+    # loss function
+    group.add_argument(
+        '--loss_fn',
+        type=str,
+        choices=['cross_entropy', 'focal_loss'],
+        help='Loss function to use for training, either cross_entropy or focal_loss',
+        default='cross_entropy',
+    )
+    group.add_argument(
+        '--focal_loss_gamma',
+        type=float,
+        help='Gamma value for Focal Loss (only used if loss_fn is focal_loss)',
+        default=2.0,
+    )
+    group.add_argument(
+        '--focal_loss_alpha',
+        type=float,
+        help='Alpha value for Focal Loss (only used if loss_fn is focal_loss)',
+        default=None,
+    )
+
     # mixed precision training
     group.add_argument(
         '--mixed_precision',
