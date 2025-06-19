@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 import torch
-import torch.nn.functional as Fun
+import torch.nn as nn
 import torchvision
 import torchvision.transforms.v2 as v2
 import wandb
@@ -16,6 +16,7 @@ from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
 from soups.opts import add_train_opts
+from soups.thirdparty.focal_loss import FocalLoss
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
 from soups.utils.training import (
@@ -190,10 +191,32 @@ def train_model(args: argparse.Namespace) -> None:
         eta_min=args.min_lr,
     )
 
+    if args.loss_fn == 'cross_entropy':
+        criterion = nn.CrossEntropyLoss(reduction='sum', label_smoothing=args.label_smoothing)
+        eval_criterion = nn.CrossEntropyLoss()
+    elif args.loss_fn == 'focal_loss':
+        criterion = FocalLoss(
+            gamma=args.focal_loss_gamma,
+            alpha=args.focal_loss_alpha,
+            reduction='sum',
+            task_type='multi-class',
+            num_classes=num_classes,
+        )
+        eval_criterion = FocalLoss(
+            gamma=args.focal_loss_gamma,
+            alpha=args.focal_loss_alpha,
+            reduction='mean',
+            task_type='multi-class',
+            num_classes=num_classes,
+        )
+    else:
+        raise ValueError(f'Unknown loss function: {args.loss_fn}')
+
     if args.run_test_only:
         test_results = eval_model(
             model=model,
             eval_data_loader=test_data_loader,
+            criterion=eval_criterion,
             device=device,
             num_classes=num_classes,
         )
@@ -270,7 +293,8 @@ def train_model(args: argparse.Namespace) -> None:
 
                 with autocast_context:
                     logits = model(images)
-                    loss = Fun.cross_entropy(input=logits, target=labels, reduction='sum')
+                    loss = criterion(logits, labels)
+
                     if num_items_in_batch > 0:
                         loss = loss / num_items_in_batch
 
@@ -310,6 +334,7 @@ def train_model(args: argparse.Namespace) -> None:
         val_results = eval_model(
             model=model_ema.module if model_ema is not None else model,
             eval_data_loader=val_data_loader,
+            criterion=eval_criterion,
             device=device,
             num_classes=num_classes,
         )
@@ -329,6 +354,7 @@ def train_model(args: argparse.Namespace) -> None:
         test_results = eval_model(
             model=model_ema.module if model_ema is not None else model,
             eval_data_loader=test_data_loader,
+            criterion=eval_criterion,
             device=device,
             num_classes=num_classes,
         )
