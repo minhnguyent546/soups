@@ -197,16 +197,19 @@ def train_model(args: argparse.Namespace) -> None:
         criterion = nn.CrossEntropyLoss(reduction='sum', label_smoothing=args.label_smoothing)
         eval_criterion = nn.CrossEntropyLoss()
     elif args.loss_fn == 'focal_loss':
+        focal_loss_alpha = args.focal_loss_alpha
+        if isinstance(focal_loss_alpha, float):
+            focal_loss_alpha = [focal_loss_alpha] * num_classes
         criterion = FocalLoss(
             gamma=args.focal_loss_gamma,
-            alpha=args.focal_loss_alpha,
+            alpha=focal_loss_alpha,
             reduction='sum',
             task_type='multi-class',
             num_classes=num_classes,
         )
         eval_criterion = FocalLoss(
             gamma=args.focal_loss_gamma,
-            alpha=args.focal_loss_alpha,
+            alpha=focal_loss_alpha,
             reduction='mean',
             task_type='multi-class',
             num_classes=num_classes,
