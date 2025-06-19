@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
 
 python train.py \
-  --seed 42 \
+  --seed 111 \
   --model timm/coatnet_0_rw_224.sw_in1k \
-  --dataset_dir data/ICH-17-processed-2 \
-  --train_batch_size 32 \
-  --eval_batch_size 32 \
+  --dataset_dir data/ICH-17-processed-3 \
+  --train_batch_size 64 \
+  --eval_batch_size 64 \
   --num_epochs 50 \
+  --label_smoothing 0.1 \
+  --num_workers 4 \
+  --loss_fn cross_entropy \
+  --mixed_precision fp16 \
+  --gradient_accum_steps 2 \
   --lr 1e-4 \
   --min_lr 0.0 \
-  --weight_decay 1.0e-4 \
-  --label_smoothing 0.1 \
+  --weight_decay 1.0e-3 \
   --scheduler_T_0 10 \
   --scheduler_T_mult 3 \
+  --best_checkpoint_metrics accuracy f1 \
+  --save_best_k 8 \
+  --use_mixup_cutmix \
+  --max_grad_norm 1.0 \
   --wandb_logging \
   --wandb_project soups \
   --wandb_name example_expr
