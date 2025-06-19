@@ -289,7 +289,7 @@ def train_model(args: argparse.Namespace) -> None:
             batch_loss: float = 0.0
             for images, labels in batches:
                 images = images.to(device)
-                labels = labels.to(device)
+                labels = labels.to(dtype=torch.int64, device=device)
 
                 with autocast_context:
                     logits = model(images)
