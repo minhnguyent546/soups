@@ -80,6 +80,8 @@ def eval_model(
         for images, labels in eval_iter:
             images = images.to(device)
             labels = labels.to(device)
+            if labels.ndim == 1:
+                labels = labels.to(torch.int64)
 
             with autocast_context:
                 logits = model(images)

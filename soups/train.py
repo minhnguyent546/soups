@@ -85,6 +85,8 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # CutMiX & MixUp
+    if args.use_mixup_cutmix and args.loss_fn == 'focal_loss':
+        raise ValueError('MixUp & CutMix cannot be used with focal loss. Please use cross entropy loss instead or disable MixUp & CutMix.')
     if args.use_mixup_cutmix:
         logger.info('MixUp & CutMix enabled')
         cutmix = v2.CutMix(alpha=1.0, num_classes=num_classes)
@@ -289,7 +291,10 @@ def train_model(args: argparse.Namespace) -> None:
             batch_loss: float = 0.0
             for images, labels in batches:
                 images = images.to(device)
-                labels = labels.to(dtype=torch.int64, device=device)
+                labels = labels.to(device)
+                if labels.ndim == 1:
+                    # We are not applying mixup or cutmix
+                    labels = labels.to(torch.int64)
 
                 with autocast_context:
                     logits = model(images)

@@ -3,7 +3,7 @@
 python train.py \
   --seed 111 \
   --model timm/coatnet_0_rw_224.sw_in1k \
-  --dataset_dir data/ICH-17-processed-3 \
+  --dataset_dir data/ICH-17-processed-3-seed-111 \
   --train_batch_size 64 \
   --eval_batch_size 64 \
   --num_epochs 50 \
