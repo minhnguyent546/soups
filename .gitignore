@@ -28,4 +28,4 @@ _*
 /wandb
 *.bak
 *.backup
-
+/hf-remote
