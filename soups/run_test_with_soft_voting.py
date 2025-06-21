@@ -8,10 +8,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as Fun
 import torchvision
-from sklearn.metrics import (
-    confusion_matrix,
-    precision_recall_fscore_support,
-)
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from torch.utils.data import DataLoader
 
 import soups.utils as utils
