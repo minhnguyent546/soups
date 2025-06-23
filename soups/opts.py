@@ -248,7 +248,7 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         '--best_checkpoint_metrics',
         type=str,
         nargs='*',
-        choices=['accuracy', 'precision', 'recall', 'f1', 'loss'],
+        choices=['accuracy', 'precision', 'recall', 'f1'],
         help='Metric to use for saving the best checkpoint (based on validation results)',
     )
     group.add_argument(
