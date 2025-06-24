@@ -26,9 +26,10 @@ jobs:
           version: ">=0.7.0"
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Test if we can import train.py, test_multiple_checkpoints.py, and test_with_model_soups.py
+      - name: Test if we can import train and test scripts
         run: |
           uv run python --version
           uv run python train.py --help
           uv run python run_test_multiple_checkpoints.py --help
           uv run python run_test_with_model_soups.py --help
+          uv run python run_test_with_soft_voting.py --help
