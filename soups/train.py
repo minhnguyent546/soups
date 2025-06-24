@@ -45,7 +45,7 @@ def train_model(args: argparse.Namespace) -> None:
 
     # loading dataset
     train_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(224, 224)),
+        torchvision.transforms.RandomResizedCrop(size=(224, 224)),
         torchvision.transforms.RandomHorizontalFlip(p=0.5),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(

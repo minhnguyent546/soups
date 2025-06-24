@@ -36,7 +36,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     # find all model checkpoint files
     model_paths: list[str] = []
     for model_path in args.checkpoint_path:
-        if os.path.isfile(model_path):
+        if os.path.isfile(model_path) and model_path.endswith('.pth'):
             model_paths.append(model_path)
         elif os.path.isdir(model_path):
             model_paths.extend(

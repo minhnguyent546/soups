@@ -92,11 +92,14 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             'recall': f'{test_results["recall"]:0.4f}',
             'f1': f'{test_results["f1"]:0.4f}',
         }
-        test_data[checkpoint_path]['per_class_accuracy'] = {}
-        for i, class_name in enumerate(class_names):
-            test_data[checkpoint_path]['per_class_accuracy'][class_name] = (
-                f'{test_results["per_class_accuracy"][i]:0.4f}'
-            )
+        for per_class_metric in (
+            'per_class_accuracy', 'per_class_precision', 'per_class_recall', 'per_class_f1',
+        ):
+            test_data[checkpoint_path][per_class_metric] = {}
+            for i, class_name in enumerate(class_names):
+                test_data[checkpoint_path][per_class_metric][class_name] = (
+                    f'{test_results[per_class_metric][i]:0.4f}'
+                )
 
         # choose the best checkpoint based on (f1, accuracy) score
         if best_results is None:

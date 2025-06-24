@@ -20,8 +20,12 @@ _*
 *.log
 *.logs
 
+# cache
+.pytest_cache
+.ruff_cache
+
 # other
 /wandb
 *.bak
 *.backup
-
+/hf-remote
