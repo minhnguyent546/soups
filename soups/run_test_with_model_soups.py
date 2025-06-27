@@ -28,7 +28,7 @@ class Candidate:
 
 @dataclass
 class GreedySoupParamCand:
-    index: int
+    last_index: int
     params: Any
     score: float
     ingredients: list[str]  # list of model paths
@@ -196,7 +196,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         for i in range(beam_size):
             param_cands.append(
                 GreedySoupParamCand(
-                    index=i,
+                    last_index=i,
                     params=torch.load(
                         candidates[i].model_path,
                         map_location=device,
@@ -218,7 +218,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             )['model_state_dict']
 
             for j in range(beam_size):
-                if i <= param_cands[j].index:
+                if i <= param_cands[j].last_index:
                     continue
 
                 # get the potential new soup by adding the current model
@@ -248,6 +248,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                     param_cands[j].ingredients.append(candidates[i].model_path)
                     param_cands[j].score = cur_val_accuracy
                     param_cands[j].params = potential_greedy_soup_params
+                    param_cands[j].last_index = i
                     logger.info(f'Added model {candidates[i].model_path} to greedy soup beam {j + 1}')
 
         # test the final greedy soups
