@@ -45,6 +45,12 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to use greedy soups for model averaging',
     )
     parser.add_argument(
+        '--greedy_soup_beam_size',
+        type=int,
+        help='Beam size for greedy soup',
+        default=1
+    )
+    parser.add_argument(
         '--dataset_dir',
         type=str,
         help='Path to the dataset (SHOULD be the SAME dataset used during training)',
