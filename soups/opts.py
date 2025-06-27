@@ -127,6 +127,13 @@ def _add_general_opts(parser: argparse.ArgumentParser) -> None:
         help='Path to the dataset',
         default='./data/vietnamese_cultural_dataset',
     )
+    group.add_argument(
+        '--device',
+        type=str,
+        help='Device to use for training',
+        choices=['cuda', 'mps', 'cpu', 'auto'],
+        default='auto',
+    )
 
 def _add_training_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Training')
