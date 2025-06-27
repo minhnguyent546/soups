@@ -247,6 +247,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 if cur_val_accuracy >= param_cands[j].score:
                     param_cands[j].ingredients.append(candidates[i].model_path)
                     param_cands[j].score = cur_val_accuracy
+                    param_cands[j].params = potential_greedy_soup_params
                     logger.info(f'Added model {candidates[i].model_path} to greedy soup beam {j + 1}')
 
         # test the final greedy soups
