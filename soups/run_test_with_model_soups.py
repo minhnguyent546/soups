@@ -231,7 +231,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                     )['model_state_dict']
 
                     # get the potential new soup by adding the current model
-                    num_ingredients = len(beam_soup_node.ingredients)
+                    num_ingredients = beam_soup_node.ingredients.count()
                     potential_greedy_soup_params = {
                         k: beam_soup_node.params[k].clone() * (num_ingredients / (num_ingredients + 1.)) +
                         new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
