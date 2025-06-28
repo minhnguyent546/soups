@@ -278,7 +278,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 break
 
             # filter out overlapping nodes
-            unique_nodes = set((node.ingredients, i) for i, node in enumerate(new_beam_soup_nodes))
+            unique_nodes = set((node.ingredients.to01(), i) for i, node in enumerate(new_beam_soup_nodes))
 
             beam_soup_nodes = []
             for ingredients, i in unique_nodes:
