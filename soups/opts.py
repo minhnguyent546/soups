@@ -45,6 +45,12 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to use greedy soups for model averaging',
     )
     parser.add_argument(
+        '--greedy_soup_beam_size',
+        type=int,
+        help='Beam size for greedy soup',
+        default=1
+    )
+    parser.add_argument(
         '--dataset_dir',
         type=str,
         help='Path to the dataset (SHOULD be the SAME dataset used during training)',
@@ -120,6 +126,13 @@ def _add_general_opts(parser: argparse.ArgumentParser) -> None:
         type=str,
         help='Path to the dataset',
         default='./data/vietnamese_cultural_dataset',
+    )
+    group.add_argument(
+        '--device',
+        type=str,
+        help='Device to use for training',
+        choices=['cuda', 'mps', 'cpu', 'auto'],
+        default='auto',
     )
 
 def _add_training_opts(parser: argparse.ArgumentParser) -> None:

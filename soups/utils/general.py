@@ -44,6 +44,19 @@ def set_seed(seed: int = 42) -> None:
 def is_tensor_or_np(obj: Any) -> bool:
     return isinstance(obj, (torch.Tensor, np.ndarray))
 
+def get_device(device_type: str = 'auto') -> torch.device:
+    if device_type == 'auto':
+        if torch.cuda.is_available():
+            return torch.device('cuda')
+        elif torch.backends.mps.is_available():
+            return torch.device('mps')
+        else:
+            return torch.device('cpu')
+    try:
+        return torch.device(device_type)
+    except Exception:
+        return torch.device('cpu')
+
 def get_batch_samples(
     data_iter,
     num_batches: int,
