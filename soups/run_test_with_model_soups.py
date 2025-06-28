@@ -268,7 +268,12 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             print(f'** Greedy soup test results beam {i + 1}: **')
             print_eval_results(eval_results=test_results, prefix='test')
 
-            result_data[f'greedy_soup-beam_{i + 1}'] = test_results
+            result_data[f'greedy_soup-beam_{i + 1}'] = {
+                'test_results': test_results,
+                'ingredients': param_cands[i].ingredients,
+            }
+
+            # TODO: saving checkpoints
 
         # save the results
         with open(greedy_soup_result_file, 'w') as f:
