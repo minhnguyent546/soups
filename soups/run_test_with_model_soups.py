@@ -182,12 +182,6 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             'greedy_soup_results.json',
         )
         beam_size = args.greedy_soup_beam_size
-        if beam_size > len(candidates):
-            logger.warning(
-                f'Beam size {beam_size} is larger than the number of candidates {len(candidates)}. '
-                'Reducing to number of candidates.'
-            )
-            beam_size = len(candidates)
 
         # sort models by decreasing validation accuracy
         candidates = sorted(candidates, key=lambda item: item.eval_results['accuracy'], reverse=True)
