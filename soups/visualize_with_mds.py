@@ -15,7 +15,8 @@ from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
 import soups.utils.dist as dist_fun
-from soups.opts import add_visualize_predictions_opts
+from soups.opts import add_visualize_with_mds_opts
+from soups.thirdparty.mds import landmark_MDS
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
 from soups.utils.training import make_model
@@ -35,6 +36,11 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     if os.path.isfile(args.output_file):
         logger.error(f'Output file already exists: {args.output_file}')
         exit(1)
+
+    if args.use_landmark_mds:
+        logger.info('Using landmark MDS for visualization')
+    else:
+        logger.info('Using MDS for visualization')
 
     # find all model checkpoint files
     model_paths: list[str] = []
@@ -149,7 +155,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     # calculate probs for soft voting
     soft_voting_idx = None
     if all_logits_list:
-        mean_logits = torch.tensor(all_logits_list).mean(dim=0)
+        mean_logits = torch.tensor(np.array(all_logits_list)).mean(dim=0)
         soft_voting_probs = Fun.softmax(mean_logits, dim=1).numpy().tolist()
         soft_voting_preds = mean_logits.argmax(dim=1)
         all_labels = torch.tensor(eval_dataset.targets)
@@ -160,20 +166,37 @@ def visualize_predictions(args: argparse.Namespace) -> None:
         soft_voting_idx = len(all_probs_list) - 1
 
     # calculate pairwise distance with cross_entropy_dist_fn
-    all_probs_list = np.array(all_probs_list)  # pyright: ignore[reportAssignmentType]
-    dist = dist_fun.pairwise_cross_entropy_dist(torch.tensor(all_probs_list)).tolist()
-    for i in range(len(dist)):
-        dist[i][i] = 0
-    embedding = MDS(
-        n_components=2,
-        max_iter=500,
-        verbose=2,
-        n_init=4,  # pyright: ignore[reportArgumentType]
-        random_state=args.seed,
-        dissimilarity='precomputed',
-    )
+    all_probs_list_tensor = torch.tensor(np.array(all_probs_list))  # pyright: ignore[reportAssignmentType]
 
-    embeddings = embedding.fit_transform(dist)
+    embeddings = None
+    if args.use_landmark_mds:
+        landmarks = [greedy_checkpoint_idx, uniform_checkpoint_idx, soft_voting_idx]
+        landmarks = [idx for idx in landmarks if idx is not None]
+        if landmarks:
+            landmarks_dist = dist_fun.pairwise_cross_entropy_dist(
+                p=all_probs_list_tensor[landmarks],
+                q=all_probs_list_tensor,
+            )
+            embeddings = landmark_MDS(D=landmarks_dist.numpy(), lands=landmarks, dim=2)
+        else:
+            logger.warning('No landmarks provided for landmark MDS. Falling back to regular MDS.')
+
+    if embeddings is None:
+        # when we are not using landmarks MDS or landmarks are not provided, so fallback to regular MDS
+        dist = dist_fun.pairwise_cross_entropy_dist(all_probs_list_tensor).tolist()
+        for i in range(len(dist)):
+            dist[i][i] = 0
+        embedding = MDS(
+            n_components=2,
+            max_iter=500,
+            verbose=2,
+            n_init=4,  # pyright: ignore[reportArgumentType]
+            random_state=args.seed,
+            dissimilarity='precomputed',
+        )
+
+        embeddings = embedding.fit_transform(dist)
+
     annotations = [f'{acc * 100:0.2f}' for acc in accuracies]
     plot_embeddings(
         embeddings=embeddings,  # pyright: ignore[reportArgumentType]
@@ -259,7 +282,7 @@ def main():
         description='Visualize predictions from various checkpoints',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    add_visualize_predictions_opts(parser)
+    add_visualize_with_mds_opts(parser)
     args = parser.parse_args()
 
     visualize_predictions(args)

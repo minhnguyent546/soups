@@ -101,12 +101,17 @@ def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
         default='./test_results.json',
     )
 
-def add_visualize_predictions_opts(parser: argparse.ArgumentParser) -> None:
+def add_visualize_with_mds_opts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--seed',
         type=int,
         help='Seed',
         default=42,
+    )
+    parser.add_argument(
+        '--use_landmark_mds',
+        action='store_true',
+        help='Whether to use landmark MDS',
     )
     parser.add_argument(
         '--greedy_soup_checkpoint',
