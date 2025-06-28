@@ -1,18 +1,20 @@
-name: Check environment
+name: Check imports
 
 on:
   push:
     branches:
       - main
       - dev/thien
+      - dev/khang
   pull_request:
     branches:
       - main
       - dev/thien
+      - dev/khang
   workflow_dispatch:
 
 jobs:
-  test_environment:
+  check_imports:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -26,9 +28,7 @@ jobs:
           version: ">=0.7.0"
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Test if we can import train.py, test_multiple_checkpoints.py, and test_with_model_soups.py
+      - name: Check imports
         run: |
-          uv run python --version
-          uv run python train.py --help
-          uv run python run_test_multiple_checkpoints.py --help
-          uv run python run_test_with_model_soups.py --help
+          export PYTHONPATH="${{ github.workspace }}"
+          uv run python .github/workflows/check_imports.py --src_path soups
