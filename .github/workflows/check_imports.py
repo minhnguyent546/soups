@@ -7,7 +7,7 @@ import sys
 
 
 def check_imports(args: argparse.Namespace) -> None:
-    src_path = pathlib.Path(args.path)
+    src_path = pathlib.Path(args.src_path)
     num_files = 0
     for pyfile in src_path.rglob('*.py'):
         print('Trying to import', pyfile)
