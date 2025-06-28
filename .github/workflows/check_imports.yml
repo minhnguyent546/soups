@@ -31,4 +31,4 @@ jobs:
       - name: Check imports
         run: |
           export PYTHONPATH="${{ github.workspace }}"
-          uv run python .github/workflow/check_imports.py --src_path soups
+          uv run python .github/workflows/check_imports.py --src_path soups
