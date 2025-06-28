@@ -15,12 +15,7 @@ from torch.utils.data import DataLoader
 import soups.utils as utils
 from soups.opts import add_test_with_model_soups_opts
 from soups.utils.logger import init_logger, logger
-from soups.utils.training import (
-    EvalResults,
-    eval_model,
-    make_model,
-    print_eval_results,
-)
+from soups.utils.training import EvalResults, eval_model, make_model, print_eval_results
 
 
 @dataclass
@@ -34,6 +29,7 @@ class BeamSoupNode:  # present a Node in the beam search tree
     score: float
     ingredients: bitarray  # a bit array of length num_models to indicate which models are included in the current node
     is_stopped: bool = False  # indicates whether this node has been stopped (i.e. no more models can be added to the soup so that the score improves)
+
 
 SCORE_EPSILON = 1.0e-6
 
@@ -232,7 +228,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
                 any_improved = False
                 for i in range(len(candidates)):
-                    if beam_soup_node.ingredients[i] == True:
+                    if beam_soup_node.ingredients[i] is True:
                         # already included in the soup
                         continue
 
@@ -271,7 +267,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                         )
                         new_beam_soup_nodes.append(new_beam_soup_node)
 
-                if any_improved == False:
+                if any_improved is False:
                     # if no improvement was found, mark this node as stopped
                     beam_soup_node.is_stopped = True
                     new_beam_soup_nodes.append(beam_soup_node)
