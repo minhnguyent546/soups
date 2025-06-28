@@ -304,9 +304,14 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             print(f'** Greedy soup test results beam {i + 1}: **')
             print_eval_results(eval_results=test_results, prefix='test')
 
+            ingredient_list = beam_soup_nodes[i].ingredients.tolist()
             result_data[f'greedy_soup-beam_{i + 1}'] = {
                 'test_results': test_results,
-                'ingredients': beam_soup_nodes[i].ingredients,
+                'ingredients': (
+                    candidates[i].model_path
+                    for idx in range(len(ingredient_list))
+                    if ingredient_list[idx] is True
+                )
             }
 
             # TODO: saving checkpoints
