@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
+import argparse
+import importlib.util
 import pathlib
 import sys
-import importlib.util
 
 
-def check_imports(path: str = 'src'):
-    src_path = pathlib.Path(path)
+def check_imports(args: argparse.Namespace) -> None:
+    src_path = pathlib.Path(args.path)
     num_files = 0
     for pyfile in src_path.rglob('*.py'):
         print('Trying to import', pyfile)
@@ -17,7 +18,7 @@ def check_imports(path: str = 'src'):
         )
         if spec is None:
             print(f'Failed to load {pyfile}', file=sys.stderr)
-            sys.exit(1)
+            raise SystemExit(1)
 
         assert spec.loader is not None
         module = importlib.util.module_from_spec(spec)
@@ -26,10 +27,24 @@ def check_imports(path: str = 'src'):
             num_files += 1
         except Exception as e:
             print(f'Error importing {module_name}: {e}', file=sys.stderr)
-            sys.exit(1)
+            raise SystemExit(1)
 
     print(f'All {num_files} imports checked successfully.')
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description='Check imports in Python files',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        '--src_path',
+        type=str,
+        help='Path to the source directory',
+        default='src',
+    )
+    args = parser.parse_args()
+    check_imports(args)
+
 
 if __name__ == '__main__':
-    check_imports('soups')
+    main()
