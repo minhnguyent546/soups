@@ -25,7 +25,10 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     utils.set_seed(args.seed)
     logger.info(f'Using seed: {args.seed}')
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device(
+        'cuda' if torch.cuda.is_available() else 
+        'mps' if torch.backends.mps.is_available() else 'cpu',
+    )
     logger.info(f'Using device: {device}')
 
     if os.path.isfile(args.output_file):
@@ -34,6 +37,21 @@ def visualize_predictions(args: argparse.Namespace) -> None:
 
     # find all model checkpoint files
     model_paths: list[str] = []
+    greedy_checkpoint_idx = None
+    uniform_checkpoint_idx = None
+    if (
+        args.greedy_soup_checkpoint is not None and
+        args.greedy_soup_checkpoint.endswith('.pth')
+    ):
+        model_paths.append(args.greedy_soup_checkpoint)
+        greedy_checkpoint_idx = len(model_paths) - 1
+    if (
+        args.uniform_soup_checkpoint is not None and
+        args.uniform_soup_checkpoint.endswith('.pth')
+    ):
+        model_paths.append(args.uniform_soup_checkpoint)
+        uniform_checkpoint_idx = len(model_paths) - 1
+
     for model_path in args.checkpoint_path:
         if os.path.isfile(model_path) and model_path.endswith('.pth'):
             model_paths.append(model_path)
@@ -120,23 +138,44 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     )
 
     embeddings = embedding.fit_transform(features_list)
-    plot_embeddings(embeddings, save_path=args.output_file, show=False)
+    plot_embeddings(
+        embeddings,  # pyright: ignore[reportArgumentType]
+        greedy_checkpoint_idx=greedy_checkpoint_idx,
+        uniform_checkpoint_idx=uniform_checkpoint_idx,
+        save_path=args.output_file,
+        show=False,
+    )
 
 def plot_embeddings(
-    embeddings: np.ndarray,
+    embeddings: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
+    greedy_checkpoint_idx: int | None = None,
+    uniform_checkpoint_idx: int | None = None,
     save_path: str | None = None,
     show: bool = True,
 ) -> None:
     plt.style.use('science')
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(8, 8))
 
-    # plot the first embedding with red color
-    plt.scatter(
-        embeddings[0, 0], embeddings[0, 1], c='red', s=50, alpha=0.5, label='Aggregated Model',
-    )
-    if embeddings.shape[0] > 1:
+    spec_indices = []
+    if greedy_checkpoint_idx is not None and greedy_checkpoint_idx < embeddings.shape[0]:
+        spec_indices.append(greedy_checkpoint_idx)
         plt.scatter(
-            embeddings[1:, 0], embeddings[1:, 1], s=50, alpha=0.5, label='Ingredient Models',
+            embeddings[greedy_checkpoint_idx, 0], embeddings[greedy_checkpoint_idx, 1],
+            c='red', s=50, alpha=0.5, label='Greedy Model',
+        )
+    if uniform_checkpoint_idx is not None and uniform_checkpoint_idx < embeddings.shape[0]:
+        spec_indices.append(uniform_checkpoint_idx)
+        plt.scatter(
+            embeddings[uniform_checkpoint_idx, 0], embeddings[uniform_checkpoint_idx, 1],
+            c='green', s=50, alpha=0.5, label='Uniform Model',
+        )
+
+    # plot remaining embeddings
+    if spec_indices:
+        embeddings = np.delete(embeddings, spec_indices, axis=0)
+    if embeddings.shape[0] > 0:
+        plt.scatter(
+            embeddings[:, 0], embeddings[:, 1], s=50, alpha=0.5, label='Ingredient Models',
         )
 
     plt.legend()
@@ -160,7 +199,6 @@ def main():
     args = parser.parse_args()
 
     visualize_predictions(args)
-
 
 if __name__ == '__main__':
     main()

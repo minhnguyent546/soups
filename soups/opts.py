@@ -109,6 +109,29 @@ def add_visualize_predictions_opts(parser: argparse.ArgumentParser) -> None:
         default=42,
     )
     parser.add_argument(
+        '--greedy_soup_checkpoint',
+        type=str,
+        help='Path to the greedy soup checkpoint file (.pth file)',
+        default=None,
+    )
+    parser.add_argument(
+        '--uniform_soup_checkpoint',
+        type=str,
+        help='Path to the uniform soup checkpoint file (.pth file)',
+        default=None,
+    )
+    parser.add_argument(
+        '--checkpoint_path',
+        type=str,
+        nargs='+',
+        help=(
+            'Can be either a checkpoint file (.pth file) or a directory. '
+            'In case of a directory, all of the checkpoints in that directory '
+            'will be evaluated.'
+        ),
+        required=True,
+    )
+    parser.add_argument(
         '--checkpoint_path',
         type=str,
         nargs='+',
