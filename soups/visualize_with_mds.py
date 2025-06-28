@@ -18,6 +18,7 @@ from soups.opts import add_visualize_predictions_opts
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
 from soups.utils.training import make_model
+import soups.utils.dist as dist_fun
 
 
 def visualize_predictions(args: argparse.Namespace) -> None:
@@ -26,7 +27,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     logger.info(f'Using seed: {args.seed}')
 
     device = torch.device(
-        'cuda' if torch.cuda.is_available() else 
+        'cuda' if torch.cuda.is_available() else
         'mps' if torch.backends.mps.is_available() else 'cpu',
     )
     logger.info(f'Using device: {device}')
@@ -94,7 +95,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
         persistent_workers=True,
     )
 
-    features_list: list[list[int]] = []
+    all_probs_list: list[list[list[float]]] = []
     model = make_model(
         model_name=args.model,
         num_classes=num_classes,
@@ -108,7 +109,9 @@ def visualize_predictions(args: argparse.Namespace) -> None:
 
         eval_iter = tqdm(eval_data_loader, desc='Evaluating model')
         eval_loss = AverageMeter('eval_loss', fmt=':0.4f')
-        all_preds: list[int] = []
+
+        # for each image in the dataset, we store the probability for each class
+        probs_list: list[list[float]] = []
 
         with torch.no_grad():
             for images, labels in eval_iter:
@@ -116,17 +119,23 @@ def visualize_predictions(args: argparse.Namespace) -> None:
                 labels = labels.to(device)
 
                 logits = model(images)
+                probs = Fun.softmax(logits, dim=1)
                 loss = Fun.cross_entropy(input=logits, target=labels)
                 eval_loss.update(loss.item(), labels.shape[0])
 
-                preds = logits.argmax(dim=1)
-                all_preds.extend(preds.detach().cpu().numpy())
+                probs_list.extend(probs.detach().cpu().numpy())
 
                 eval_iter.set_postfix({
                     'loss': f'{loss:0.4f}',
                 })
 
-        features_list.append(all_preds)
+        all_probs_list.append(probs_list)
+
+    # calculate pairwise distance with cross_entropy_dist_fn
+    all_probs_list = np.array(all_probs_list)  # pyright: ignore[reportAssignmentType]
+    dist = dist_fun.pairwise_cross_entropy_dist(torch.tensor(all_probs_list)).tolist()
+    for i in range(len(dist)):
+        dist[i][i] = 0
 
     embedding = MDS(
         n_components=2,
@@ -134,10 +143,10 @@ def visualize_predictions(args: argparse.Namespace) -> None:
         verbose=2,
         n_init=4,  # pyright: ignore[reportArgumentType]
         random_state=args.seed,
-        dissimilarity='euclidean',
+        dissimilarity='precomputed',
     )
 
-    embeddings = embedding.fit_transform(features_list)
+    embeddings = embedding.fit_transform(dist)
     plot_embeddings(
         embeddings,  # pyright: ignore[reportArgumentType]
         greedy_checkpoint_idx=greedy_checkpoint_idx,
@@ -199,6 +208,7 @@ def main():
     args = parser.parse_args()
 
     visualize_predictions(args)
+
 
 if __name__ == '__main__':
     main()

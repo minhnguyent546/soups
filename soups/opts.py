@@ -132,17 +132,6 @@ def add_visualize_predictions_opts(parser: argparse.ArgumentParser) -> None:
         required=True,
     )
     parser.add_argument(
-        '--checkpoint_path',
-        type=str,
-        nargs='+',
-        help=(
-            'Can be either a checkpoint file (.pth file) or a directory. '
-            'In case of a directory, all of the checkpoints in that directory '
-            'will be evaluated.'
-        ),
-        required=True,
-    )
-    parser.add_argument(
         '--model',
         type=str,
         help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
