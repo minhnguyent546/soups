@@ -363,10 +363,13 @@ def train_model(args: argparse.Namespace) -> None:
 
         for metric in args.best_checkpoint_metrics:
             current_metric_value = val_results[metric]
+            if metric == 'loss':
+                # For loss, we want to save the lowest value, so we negate it
+                current_metric_value = -current_metric_value
 
             current_checkpoint_path = os.path.join(
                 checkpoint_dir,
-                f'model_epoch_{epoch}_{metric}_{current_metric_value:.4f}.pth',
+                f'model_epoch_{epoch}_{metric}_{abs(current_metric_value):.4f}.pth',
             )
 
             if len(best_val_results[metric]) < args.save_best_k:
@@ -384,7 +387,7 @@ def train_model(args: argparse.Namespace) -> None:
                     'epoch': epoch,
                     'global_step': global_step,
                 }, current_checkpoint_path)
-                logger.info(f'Saved checkpoint for {metric}: {current_metric_value:.4f} to {current_checkpoint_path}')
+                logger.info(f'Saved checkpoint for {metric}: {abs(current_metric_value):.4f} to {current_checkpoint_path}')
             else:
                 # If we already have args.save_best_k checkpoints, check if the current one is better than the worst of them.
                 # The worst of the k is at the top of the min-heap (best_val_results[metric][0]).
@@ -393,7 +396,10 @@ def train_model(args: argparse.Namespace) -> None:
                 if current_metric_value > worst_of_k_value:
                     # Current checkpoint is better, so replace the worst one in the heap
                     # heapq.heapreplace pops the smallest item and then pushes the new item
-                    old_worst_checkpoint_tuple = heapq.heapreplace(best_val_results[metric], (current_metric_value, current_checkpoint_path))
+                    old_worst_checkpoint_tuple = heapq.heapreplace(
+                        best_val_results[metric],
+                        (current_metric_value, current_checkpoint_path),
+                    )
                     old_worst_path = old_worst_checkpoint_tuple[1]
 
                     # Delete the old worst checkpoint file from disk
@@ -409,8 +415,8 @@ def train_model(args: argparse.Namespace) -> None:
                         'global_step': global_step,
                     }, current_checkpoint_path)
                     logger.info(
-                        f'Replaced checkpoint for {metric}: {current_metric_value:.4f} '
-                        f'(old worst: {worst_of_k_value:.4f}) to {current_checkpoint_path}',
+                        f'Replaced checkpoint for {metric}: {abs(current_metric_value):.4f} '
+                        f'(old worst: {abs(worst_of_k_value):.4f}) to {current_checkpoint_path}',
                     )
 
 def main():
