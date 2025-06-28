@@ -1,6 +1,7 @@
 """Run test with model soups"""
 
 import argparse
+import copy
 import json
 import os
 from dataclasses import dataclass
@@ -8,6 +9,7 @@ from typing import Any
 
 import torch
 import torchvision
+from bitarray import bitarray
 from torch.utils.data import DataLoader
 
 import soups.utils as utils
@@ -27,11 +29,13 @@ class Candidate:
     eval_results: EvalResults
 
 @dataclass
-class GreedySoupParamCand:
-    last_index: int
+class BeamSoupNode:  # present a Node in the beam search tree
     params: Any
     score: float
-    ingredients: list[str]  # list of model paths
+    ingredients: bitarray  # a bit array of length num_models to indicate which models are included in the current node
+    is_stopped: bool = False  # indicates whether this node has been stopped (i.e. no more models can be added to the soup so that the score improves)
+
+SCORE_EPSILON = 1.0e-6
 
 def test_with_model_soups(args: argparse.Namespace) -> None:
     if os.path.isdir(args.output_dir):
@@ -189,20 +193,24 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             )
             beam_size = len(candidates)
 
-        # sort models by decreasing test accuracy
+        # sort models by decreasing validation accuracy
         candidates = sorted(candidates, key=lambda item: item.eval_results['accuracy'], reverse=True)
 
-        param_cands: list[GreedySoupParamCand] = []
+        # start greedily by selecting the top `beam_size` candidates
+        beam_soup_nodes: list[BeamSoupNode] = []
+        assert beam_size <= len(candidates)
         for i in range(beam_size):
-            param_cands.append(
-                GreedySoupParamCand(
-                    last_index=i,
+            ingredients = bitarray(len(candidates))
+            ingredients[i] = True
+            beam_soup_nodes.append(
+                BeamSoupNode(
                     params=torch.load(
                         candidates[i].model_path,
                         map_location=device,
                     )['model_state_dict'],
                     score=candidates[i].eval_results['accuracy'],
-                    ingredients=[candidates[i].model_path]
+                    ingredients=ingredients,
+                    is_stopped=False,
                 )
             )
 
@@ -211,45 +219,77 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         for candidate in candidates:
             result_data['models'][candidate.model_path] = candidate.eval_results
 
-        for i in range(num_models):
-            new_ingredient_params = torch.load(
-                candidates[i].model_path,
-                map_location=device,
-            )['model_state_dict']
+        model = make_model(model_name=args.model, num_classes=num_classes).to(device)
 
-            for j in range(beam_size):
-                if i <= param_cands[j].last_index:
+        while True:
+            assert len(beam_soup_nodes) > 0
+            new_beam_soup_nodes: list[BeamSoupNode] = []
+            for beam_soup_node in beam_soup_nodes:
+                if beam_soup_node.is_stopped:
+                    # this node has been stopped and cannot be expanded further
+                    new_beam_soup_nodes.append(beam_soup_node)
                     continue
 
-                # get the potential new soup by adding the current model
-                num_ingredients = len(param_cands[j].ingredients)
-                potential_greedy_soup_params = {
-                    k: param_cands[j].params[k].clone() * (num_ingredients / (num_ingredients + 1.)) +
-                    new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
-                    for k in new_ingredient_params
-                }
+                any_improved = False
+                for i in range(len(candidates)):
+                    if beam_soup_node.ingredients[i] == True:
+                        # already included in the soup
+                        continue
 
-                # test the new-branch model
-                model = make_model(model_name=args.model, num_classes=num_classes).to(device)
-                model.load_state_dict(potential_greedy_soup_params)
-                cur_val_accuracy = eval_model(
-                    model=model,
-                    eval_data_loader=val_data_loader,
-                    device=device,
-                    num_classes=num_classes,
-                )['accuracy']
+                    new_ingredient_params = torch.load(
+                        candidates[i].model_path,
+                        map_location=device,
+                    )['model_state_dict']
 
-                # if accuracy improves, add the model to the soup
-                logger.info(
-                    f'Potential greedy soup val acc {cur_val_accuracy:0.6f}, '
-                    f'best so far for beam {j + 1} {param_cands[j].score:0.6f}.'
-                )
-                if cur_val_accuracy >= param_cands[j].score:
-                    param_cands[j].ingredients.append(candidates[i].model_path)
-                    param_cands[j].score = cur_val_accuracy
-                    param_cands[j].params = potential_greedy_soup_params
-                    param_cands[j].last_index = i
-                    logger.info(f'Added model {candidates[i].model_path} to greedy soup beam {j + 1}')
+                    # get the potential new soup by adding the current model
+                    num_ingredients = len(beam_soup_node.ingredients)
+                    potential_greedy_soup_params = {
+                        k: beam_soup_node.params[k].clone() * (num_ingredients / (num_ingredients + 1.)) +
+                        new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
+                        for k in new_ingredient_params
+                    }
+
+                    # test the new-branch model
+                    model.load_state_dict(potential_greedy_soup_params)
+                    cur_val_score = eval_model(
+                        model=model,
+                        eval_data_loader=val_data_loader,
+                        device=device,
+                        num_classes=num_classes,
+                    )['accuracy']
+
+                    # if validation score (accuracy in this case) improves, add the model to the soup
+                    if cur_val_score + SCORE_EPSILON > beam_soup_node.score:
+                        any_improved = True
+                        new_ingredients = copy.deepcopy(beam_soup_node.ingredients)
+                        new_ingredients[i] = True
+                        new_beam_soup_node = BeamSoupNode(
+                            params=potential_greedy_soup_params,
+                            score=cur_val_score,
+                            ingredients=new_ingredients,
+                            is_stopped=False,
+                        )
+                        new_beam_soup_nodes.append(new_beam_soup_node)
+
+                if any_improved == False:
+                    # if no improvement was found, mark this node as stopped
+                    beam_soup_node.is_stopped = True
+                    new_beam_soup_nodes.append(beam_soup_node)
+
+            if all(node.is_stopped for node in new_beam_soup_nodes):
+                # if all nodes have been stopped, we can stop the greedy soup search
+                logger.info('All nodes have been stopped. Stopping greedy soup search.')
+                break
+
+            # filter out overlapping nodes
+            unique_nodes = set((node.ingredients, i) for i, node in enumerate(new_beam_soup_nodes))
+
+            beam_soup_nodes = []
+            for ingredients, i in unique_nodes:
+                beam_soup_nodes.append(new_beam_soup_nodes[i])
+
+            beam_soup_nodes = sorted(beam_soup_nodes, key=lambda x: x.score, reverse=True)
+            beam_soup_nodes = beam_soup_nodes[:beam_size]  # keep only the top `beam_size` nodes
 
         # test the final greedy soups
         model = make_model(
@@ -257,8 +297,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             num_classes=num_classes,
         ).to(device)
 
-        for i in range(len(param_cands)):
-            model.load_state_dict(param_cands[i].params)
+        for i in range(len(beam_soup_nodes)):
+            model.load_state_dict(beam_soup_nodes[i].params)
             test_results = eval_model(
                 model=model,
                 eval_data_loader=test_data_loader,
@@ -270,7 +310,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
             result_data[f'greedy_soup-beam_{i + 1}'] = {
                 'test_results': test_results,
-                'ingredients': param_cands[i].ingredients,
+                'ingredients': beam_soup_nodes[i].ingredients,
             }
 
             # TODO: saving checkpoints
@@ -279,6 +319,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         with open(greedy_soup_result_file, 'w') as f:
             json.dump(result_data, f, indent=4)
         logger.info(f'Uniform soup results saved to {greedy_soup_result_file}')
+
+    # TODO: consider supporting score other than accuracy for cooking
 
 def main():
     parser = argparse.ArgumentParser(
