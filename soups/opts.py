@@ -243,6 +243,25 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to use warmup for Model EMA',
     )
 
+    # SAM and ASAM
+    group.add_argument(
+        '--sam_rho',
+        type=float,
+        help='Rho value for SAM and ASAM (according to ASAM paper, you should use a higher `rho` for ASAM compared to SAM, e.g. 0.5 or 1.0)',
+        default=0.05,
+    )
+    sam_group = group.add_mutually_exclusive_group()
+    sam_group.add_argument(
+        '--use_sam',
+        action='store_true',
+        help='Whether to use Sharpness-Aware Minimization (SAM)',
+    )
+    sam_group.add_argument(
+        '--use_asam',
+        action='store_true',
+        help='Whether to use Adaptive Sharpness-Aware Minimization (ASAM)',
+    )
+
     # save best checkpoints
     group.add_argument(
         '--best_checkpoint_metrics',
