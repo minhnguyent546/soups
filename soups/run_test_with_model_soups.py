@@ -192,10 +192,9 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         # sort models by decreasing validation accuracy
         candidates = sorted(candidates, key=lambda item: item.eval_results['accuracy'], reverse=True)
 
-        # start greedily by selecting the top `beam_size` candidates
+        # add stating nodes
         beam_soup_nodes: list[BeamSoupNode] = []
-        assert beam_size <= len(candidates)
-        for i in range(beam_size):
+        for i in range(len(candidates)):
             ingredients = bitarray(len(candidates))
             ingredients[i] = True
             beam_soup_nodes.append(
