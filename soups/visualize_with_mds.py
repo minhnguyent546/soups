@@ -96,6 +96,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     )
 
     all_probs_list: list[list[list[float]]] = []
+    accuracies: list[float] = []
     all_logits_list: list[list[int]] = []  # for soft voting (excluding greedy and uniform checkpoints)
     model = make_model(
         model_name=args.model,
@@ -110,6 +111,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
 
         eval_iter = tqdm(eval_data_loader, desc='Evaluating model')
         eval_loss = AverageMeter('eval_loss', fmt=':0.4f')
+        eval_accuracy = AverageMeter('eval_accuracy', fmt=':0.4f')
 
         # for each image in the dataset, we store the probability for each class
         probs_list: list[list[float]] = []
@@ -123,8 +125,14 @@ def visualize_predictions(args: argparse.Namespace) -> None:
 
                 logits = model(images)
                 probs = Fun.softmax(logits, dim=1)
+                preds = logits.argmax(dim=1)
+
                 loss = Fun.cross_entropy(input=logits, target=labels)
                 eval_loss.update(loss.item(), labels.shape[0])
+
+                num_corrects = (preds == labels).sum().item()
+                cur_accuracy = num_corrects / labels.shape[0]
+                eval_accuracy.update(cur_accuracy, labels.shape[0])
 
                 probs_list.extend(probs.detach().cpu().numpy())
                 logits_list.extend(logits.detach().cpu().numpy())
@@ -134,6 +142,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
                 })
 
         all_probs_list.append(probs_list)
+        accuracies.append(eval_accuracy.avg)
         if i != greedy_checkpoint_idx and i != uniform_checkpoint_idx:
             all_logits_list.append(logits_list)
 
@@ -142,7 +151,12 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     if all_logits_list:
         mean_logits = torch.tensor(all_logits_list).mean(dim=0)
         soft_voting_probs = Fun.softmax(mean_logits, dim=1).numpy().tolist()
+        soft_voting_preds = mean_logits.argmax(dim=1)
+        all_labels = torch.tensor(eval_dataset.targets)
+        soft_voting_accuracy = (soft_voting_preds == all_labels).sum().item() / len(all_labels)
         all_probs_list.append(soft_voting_probs)
+        accuracies.append(soft_voting_accuracy)
+
         soft_voting_idx = len(all_probs_list) - 1
 
     # calculate pairwise distance with cross_entropy_dist_fn
@@ -160,8 +174,10 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     )
 
     embeddings = embedding.fit_transform(dist)
+    annotations = [f'{acc * 100:0.2f}' for acc in accuracies]
     plot_embeddings(
-        embeddings,  # pyright: ignore[reportArgumentType]
+        embeddings=embeddings,  # pyright: ignore[reportArgumentType]
+        annotations=annotations,
         greedy_soup_idx=greedy_checkpoint_idx,
         uniform_soup_idx=uniform_checkpoint_idx,
         soft_voting_idx=soft_voting_idx,
@@ -171,33 +187,50 @@ def visualize_predictions(args: argparse.Namespace) -> None:
 
 def plot_embeddings(
     embeddings: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
+    annotations: list[str] | None = None,
     greedy_soup_idx: int | None = None,
     uniform_soup_idx: int | None = None,
     soft_voting_idx: int | None = None,
     save_path: str | None = None,
     show: bool = True,
 ) -> None:
+    if annotations is not None:
+        assert len(embeddings) == len(annotations), (
+            'Number of embeddings must match number of annotations'
+        )
     plt.style.use('science')
     plt.figure(figsize=(8, 8))
+
+    # draw annotation if provided
+    if annotations is not None:
+        for i, annotation in enumerate(annotations):
+            plt.annotate(
+                annotation,
+                (embeddings[i, 0], embeddings[i, 1]),
+                fontsize=10,
+                alpha=0.7,
+                xytext=(-8, 4),
+                textcoords='offset points',
+            )
 
     exclude_indices = []
     if greedy_soup_idx is not None and greedy_soup_idx < embeddings.shape[0]:
         exclude_indices.append(greedy_soup_idx)
         plt.scatter(
             embeddings[greedy_soup_idx, 0], embeddings[greedy_soup_idx, 1],
-            c='red', s=50, alpha=0.5, label='Greedy Model',
+            c='red', s=75, alpha=0.5, label='Greedy Model',
         )
     if uniform_soup_idx is not None and uniform_soup_idx < embeddings.shape[0]:
         exclude_indices.append(uniform_soup_idx)
         plt.scatter(
             embeddings[uniform_soup_idx, 0], embeddings[uniform_soup_idx, 1],
-            c='green', s=50, alpha=0.5, label='Uniform Model',
+            c='green', s=75, alpha=0.5, label='Uniform Model',
         )
     if soft_voting_idx is not None and soft_voting_idx < embeddings.shape[0]:
         exclude_indices.append(soft_voting_idx)
         plt.scatter(
             embeddings[soft_voting_idx, 0], embeddings[soft_voting_idx, 1],
-            c='orange', s=50, alpha=0.5, label='Soft Voting Model',
+            c='orange', s=75, alpha=0.5, label='Soft Voting Model',
         )
 
     # plot remaining embeddings
@@ -206,7 +239,7 @@ def plot_embeddings(
     if embeddings.shape[0] > 0:
         plt.scatter(
             embeddings[:, 0], embeddings[:, 1],
-            c='blue', s=50, alpha=0.5, label='Ingredient Models',
+            c='blue', s=75, alpha=0.5, label='Ingredient Models',
         )
 
     plt.legend()

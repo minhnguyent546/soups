@@ -1,5 +1,6 @@
 import torch
 
+
 def cross_entropy_dist(
     p: torch.Tensor,
     q: torch.Tensor,
