@@ -2,6 +2,7 @@
 exclude =
     .venv
     venv
+    soups/thirdparty
 extend-ignore = E501, E302
 max-line-length = 100
 per-file-ignores =
