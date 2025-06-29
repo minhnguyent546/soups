@@ -1,7 +1,40 @@
 #!/usr/bin/env python3
 
 """
-This script is used for splitting ICH-17 dataset to train/test/val
+This script is used for splitting an image dataset into training, validation, and test sets.
+
+Expected input format:
+```
+dataset_name
+├── class_1
+│     ├── image.jpg
+│     ├── image.png
+│     ├── ...
+├── class_2
+│     ├── image.jpg
+│     ├── ...
+├── ...
+```
+
+Output format:
+```
+dataset_name
+├── train
+│     ├── class_1
+│     │     ├── image.jpg
+│     │     ├── ...
+│     ├── class_2
+│     │     ├── image.jpg
+│     │     ├── ...
+├── val
+│     ├── class_1
+│     │     ├── image.jpg
+│     │     ├── ...
+├── test
+│     ├── class_1
+│     │     ├── image.jpg
+│     │     ├── ...
+```
 """
 
 import argparse
