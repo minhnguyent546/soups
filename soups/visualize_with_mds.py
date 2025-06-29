@@ -114,6 +114,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
         model.load_state_dict(
             torch.load(model_path, map_location=device)['model_state_dict'],
         )
+        model.eval()
 
         eval_iter = tqdm(eval_data_loader, desc='Evaluating model')
         eval_loss = AverageMeter('eval_loss', fmt=':0.4f')
