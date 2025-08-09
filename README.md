@@ -31,22 +31,71 @@
 
 3. **Verify installation:**
    ```bash
-   python train.py --help
+   python -m soups.train --help
    ```
 
 ### Preparing datasets
 
 > Will be updated.
 
+### Dataset structure
+
+```
+dataset_name
+├── train
+│   ├── class_1
+│   │   ├── img1.jpg
+│   │   ├── ...
+│   ├── class_2
+│   │   ├── img1.jpg
+│   │   ├── ...
+├── val
+│   ├── class_1
+│   │   ├── img1.jpg
+│   │   ├── ...
+├── test
+│   ├── class_1
+│   │   ├── img1.jpg
+│   │   ├── ...
+```
+
 ## Usage
 
 ### Training
 
-Edit the training script at `scripts/train.sh` and run the following command to train the model:
+To train the model, you can run the following command:
 ```bash
-bash scripts/train.sh
+python -m soups.train \
+  --seed 42 \
+  --model timm/coatnet_0_rw_224.sw_in1k \
+  --dataset_dir data/ICH-17 \
+  --use_mixup_cutmix \
+  --train_batch_size 32 \
+  --eval_batch_size 64 \
+  --num_epochs 50 \
+  --lr 1e-4 \
+  --min_lr 0.0 \
+  --weight_decay 1.0e-4 \
+  --label_smoothing 0.1 \
+  --scheduler_T_0 10 \
+  --scheduler_T_mult 3 \
+  --wandb_logging \
+  --wandb_project soups \
+  --wandb_name example_expr
 ```
 
 ### Inference
 
-> Will be updated.
+To run inference on a trained model, you can use the following command:
+```bash
+python -m soups.train \
+  --run_test_only \
+  --from_checkpoint /PATH/TO/CHECKPOINT.pth \
+  --seed 42 \
+  --model timm/coatnet_0_rw_224.sw_in1k \
+  --dataset_dir data/ICH-17 \
+  --eval_batch_size 64 \
+  --wandb_logging \
+  --wandb_project soups \
+  --wandb_name example_expr
+```
