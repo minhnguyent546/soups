@@ -144,7 +144,7 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # creating model
-    model = make_model(args.model, num_classes=num_classes)
+    model = make_model(args.model, num_classes=num_classes, pretrained=args.pretrained_weights)
     model.to(device)
 
     if args.from_checkpoint is not None:
@@ -168,6 +168,7 @@ def train_model(args: argparse.Namespace) -> None:
         wandb_run.define_metric(name='test/*', step_metric='epoch')
         wandb_run.define_metric(name='train/epoch_loss', step_metric='epoch')
     if not args.run_test_only:
+        assert checkpoint_dir is not None
         utils.save_metadata_to_checkpoint(
             checkpoint_dir=checkpoint_dir,
             args=args,

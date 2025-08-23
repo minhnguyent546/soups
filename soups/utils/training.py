@@ -25,24 +25,24 @@ class EvalResults(TypedDict):
     per_class_recall: list[float]
     per_class_f1: list[float]
 
-def make_model(model_name: str, num_classes: int) -> nn.Module:
+def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn.Module:
     model_name = model_name.lower()
     if model_name == 'resnet50':
         model = torchvision.models.resnet50(
-            weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
+            weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None,
         )
         model.fc = nn.Linear(model.fc.in_features, num_classes)
         model_classifier = model.fc
     elif model_name == 'densenet121':
         model = torchvision.models.densenet121(
-            weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1,
+            weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1 if pretrained else None,
         )
         model.classifier = nn.Linear(model.classifier.in_features, num_classes)
         model_classifier = model.classifier
     elif model_name.startswith('timm/'):
         model = timm.create_model(
             model_name[len('timm/'):],
-            pretrained=True,
+            pretrained=pretrained,
             num_classes=num_classes,
         )
         if hasattr(model, 'head') and isinstance(model.head, nn.Linear):

@@ -212,6 +212,12 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Path to the checkpoint storing the model state',
     )
     group.add_argument(
+        '--pretrained_weights',
+        action='store_true',
+        help='Whether to initializing models with pretrained weights (e.g. ImageNet-1k pretrained weights) (this option takes no effect when `from_checkpoint` is specified)',
+
+    )
+    group.add_argument(
         '--train_batch_size',
         type=int,
         help='Training batch size',
