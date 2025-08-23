@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
-from soups.opts import add_train_opts
+from soups.opts import add_training_opts
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
 from soups.utils.training import (
@@ -425,7 +425,7 @@ def main():
         description='Training model',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    add_train_opts(parser)
+    add_training_opts(parser)
     args = parser.parse_args()
 
     train_model(args)

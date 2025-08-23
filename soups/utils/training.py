@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as Fun
 import torchvision
 from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
+from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm
 from wandb.sdk.wandb_run import Run as WandbRun
@@ -192,3 +193,22 @@ def print_eval_results(
         f'{prefix}_recall {eval_results["recall"]:0.4f} | '
         f'{prefix}_f1 {eval_results["f1"]:0.4f}'
     )
+
+def select_samples_for_co_teaching(
+    logits_1: Tensor, logits_2: Tensor, labels: Tensor, forget_rate: float
+) -> tuple[Tensor, Tensor]:
+    """
+    Select samples from the two models based on the cross-entropy loss for Co-Teaching.
+    """
+    loss_1 = Fun.cross_entropy(input=logits_1, target=labels, reduction="none")
+    indices_1 = torch.argsort(loss_1)
+    loss_2 = Fun.cross_entropy(input=logits_2, target=labels, reduction="none")
+    indices_2 = torch.argsort(loss_2)
+
+    num_remembers = int((1.0 - forget_rate) * len(indices_1))
+
+    selected_indices_1 = indices_1[:num_remembers]
+    selected_indices_2 = indices_2[:num_remembers]
+
+    return selected_indices_1, selected_indices_2
+
