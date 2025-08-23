@@ -144,7 +144,7 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # creating model
-    model = make_model(args.model, num_classes=num_classes, pretrained=args.pretrained_weights)
+    model = make_model(args.model, num_classes=num_classes, pretrained=not args.random_weights)
     model.to(device)
 
     if args.from_checkpoint is not None:
