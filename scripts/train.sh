@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 
-python train.py \
+# This script is used for training the model
+
+python_command="python"
+if command -v uv &> /dev/null; then
+  python_command="uv run python"
+fi
+
+$python_command -m soups.train \
   --seed 111 \
   --model timm/coatnet_0_rw_224.sw_in1k \
-  --dataset_dir data/seed-111/ICH-17-processed-3-seed-111 \
+  --dataset_dir data/ich-split-renamed \
   --train_batch_size 64 \
   --eval_batch_size 64 \
   --num_epochs 50 \
