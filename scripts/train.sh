@@ -2,12 +2,7 @@
 
 # This script is used for training the model
 
-python_command="python"
-if command -v uv &> /dev/null; then
-  python_command="uv run python"
-fi
-
-$python_command -m soups.train \
+python -m soups.train \
   --seed 111 \
   --model timm/coatnet_0_rw_224.sw_in1k \
   --dataset_dir data/ich-split-renamed \
