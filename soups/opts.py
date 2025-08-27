@@ -2,12 +2,21 @@ import argparse
 import os
 
 
-def add_train_opts(parser: argparse.ArgumentParser) -> None:
+def add_training_opts(parser: argparse.ArgumentParser) -> None:
     """
     All options used for training the model.
     """
     _add_general_opts(parser)
     _add_training_opts(parser)
+    _add_wandb_opts(parser)
+
+def add_training_with_co_teaching_opts(parser: argparse.ArgumentParser) -> None:
+    """
+    All options used for training the model with Co-Teaching.
+    """
+    _add_general_opts(parser)
+    _add_training_opts(parser)
+    _add_co_teaching_opts(parser)
     _add_wandb_opts(parser)
 
 def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
@@ -212,6 +221,11 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Path to the checkpoint storing the model state',
     )
     group.add_argument(
+        '--random_weights',
+        action='store_true',
+        help='Whether to initializing models with random weights instead of initializing with pretrained weights (this option takes no effect when `from_checkpoint` is specified)',
+    )
+    group.add_argument(
         '--train_batch_size',
         type=int,
         help='Training batch size',
@@ -336,6 +350,27 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         type=float,
         help='Maximum gradient norm for gradient clipping',
         default=0.0,
+    )
+
+def _add_co_teaching_opts(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group('Co-Teaching')
+    group.add_argument(
+        '--forget_rate',
+        type=float,
+        help='Forget rate for Co-Teaching',
+        default=0.2,
+    )
+    group.add_argument(
+        '--num_gradual_epochs',
+        type=int,
+        help='How many epochs for linear drop rate, can be 5, 10, 15. This parameter is equal to Tk for R(T) in Co-teaching paper.',
+        default=10,
+    )
+    group.add_argument(
+        '--forget_rate_exponent',
+        type=float,
+        help='Exponent of the forget rate, can be 0.5, 1, 2. This parameter is equal to c in Tc for R(T) in Co-teaching paper.',
+        default=1,
     )
 
 def _add_wandb_opts(parser: argparse.ArgumentParser) -> None:
