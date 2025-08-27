@@ -1,5 +1,4 @@
 import argparse
-import heapq
 import os
 from datetime import datetime
 
@@ -24,6 +23,7 @@ from soups.utils.training import (
     make_model,
     maybe_log_eval_results,
     print_eval_results,
+    save_top_k_checkpoints,
     select_samples_for_co_teaching,
 )
 
@@ -31,19 +31,19 @@ from soups.utils.training import (
 def train_model(args: argparse.Namespace) -> None:
     init_logger()
     utils.set_seed(args.seed)
-    logger.info(f"Seed: {args.seed}")
+    logger.info(f'Seed: {args.seed}')
 
     checkpoint_dir = None
     if not args.run_test_only:
         checkpoint_dir = os.path.join(
             args.checkpoints_dir,
-            datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+            datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
         )
         os.makedirs(checkpoint_dir, exist_ok=True)
 
     # training device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logger.info(f'Using device: {device}')
 
     # loading dataset
     train_transforms = torchvision.transforms.Compose([
@@ -64,30 +64,30 @@ def train_model(args: argparse.Namespace) -> None:
         ),
     ])
     train_dataset = torchvision.datasets.ImageFolder(
-        root=os.path.join(args.dataset_dir, "train"),
+        root=os.path.join(args.dataset_dir, 'train'),
         transform=train_transforms,
     )
     test_dataset = torchvision.datasets.ImageFolder(
-        root=os.path.join(args.dataset_dir, "test"),
+        root=os.path.join(args.dataset_dir, 'test'),
         transform=eval_transforms,
     )
     val_dataset = torchvision.datasets.ImageFolder(
-        root=os.path.join(args.dataset_dir, "val"),
+        root=os.path.join(args.dataset_dir, 'val'),
         transform=eval_transforms,
     )
     class_names = train_dataset.classes
     num_classes = len(class_names)
 
     logger.info(
-        f"num_classes = {num_classes}, "
-        f"train_size = {len(train_dataset)}, "
-        f"test_size = {len(test_dataset)}, "
-        f"val_size = {len(val_dataset)}"
+        f'num_classes = {num_classes}, '
+        f'train_size = {len(train_dataset)}, '
+        f'test_size = {len(test_dataset)}, '
+        f'val_size = {len(val_dataset)}'
     )
 
     # CutMiX & MixUp
     if args.use_mixup_cutmix:
-        logger.info("MixUp & CutMix enabled")
+        logger.info('MixUp & CutMix enabled')
         cutmix = v2.CutMix(alpha=1.0, num_classes=num_classes)
         mixup = v2.MixUp(alpha=1.0, num_classes=num_classes)
         cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
@@ -126,15 +126,15 @@ def train_model(args: argparse.Namespace) -> None:
 
     # mixed precision training
     mp_dtype = torch.float32
-    if device.type == "cuda" and args.mixed_precision == "fp16":
+    if device.type == 'cuda' and args.mixed_precision == 'fp16':
         mp_dtype = torch.float16
-    elif device.type == "cuda" and args.mixed_precision == "bf16":
+    elif device.type == 'cuda' and args.mixed_precision == 'bf16':
         if torch.cuda.is_bf16_supported():
             mp_dtype = torch.bfloat16
         else:
             mp_dtype = torch.float16
     if mp_dtype != torch.float32:
-        logger.info(f"Mixed precision training enabled with dtype {mp_dtype}")
+        logger.info(f'Mixed precision training enabled with dtype {mp_dtype}')
 
     autocast_context = torch.autocast(
         device_type=device.type,
@@ -157,9 +157,9 @@ def train_model(args: argparse.Namespace) -> None:
     model_2.to(device)
 
     if args.from_checkpoint is not None:
-        logger.info(f"Loading model from checkpoint: {args.from_checkpoint}")
+        logger.info(f'Loading model from checkpoint: {args.from_checkpoint}')
         checkpoint = torch.load(args.from_checkpoint, map_location=device)
-        model_1.load_state_dict(checkpoint["model_state_dict"])
+        model_1.load_state_dict(checkpoint['model_state_dict'])
 
     # setting up logging with wandb
     wandb_run = None
@@ -171,11 +171,11 @@ def train_model(args: argparse.Namespace) -> None:
             tags=args.wandb_tags,
             notes=args.wandb_notes,
             id=args.wandb_resume_id,
-            resume="must" if args.wandb_resume_id is not None else None,
+            resume='must' if args.wandb_resume_id is not None else None,
         )
-        wandb_run.define_metric(name="val/*", step_metric="epoch")
-        wandb_run.define_metric(name="test/*", step_metric="epoch")
-        wandb_run.define_metric(name="train/epoch_loss", step_metric="epoch")
+        wandb_run.define_metric(name='val/*', step_metric='epoch')
+        wandb_run.define_metric(name='test/*', step_metric='epoch')
+        wandb_run.define_metric(name='train/epoch_loss', step_metric='epoch')
     if not args.run_test_only:
         assert checkpoint_dir is not None
         utils.save_metadata_to_checkpoint(
@@ -185,8 +185,8 @@ def train_model(args: argparse.Namespace) -> None:
         )
 
     num_model_params = sum(p.numel() for p in model_1.parameters() if p.requires_grad)
-    logger.info(f"Using model: {args.model}")
-    logger.info(f"Num_params: {num_model_params / 1e6:.2f}M")
+    logger.info(f'Using model: {args.model}')
+    logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
 
     optimizer_1 = AdamW(
         model_1.parameters(),
@@ -213,7 +213,9 @@ def train_model(args: argparse.Namespace) -> None:
 
     # define drop rate schedule
     rate_schedule = np.ones(args.num_epochs) * args.forget_rate
-    rate_schedule[:args.num_gradual_epochs] = np.linspace(0, args.forget_rate ** args.forget_rate_exponent, args.num_gradual_epochs)
+    rate_schedule[: args.num_gradual_epochs] = np.linspace(
+        0, args.forget_rate**args.forget_rate_exponent, args.num_gradual_epochs
+    )
 
     if args.run_test_only:
         test_results_1 = eval_model(
@@ -223,20 +225,20 @@ def train_model(args: argparse.Namespace) -> None:
             num_classes=num_classes,
         )
         print(
-            "** Test results **\n"
-            f"  Loss: {test_results_1['loss']:0.4f}\n"
-            f"  Accuracy: {test_results_1['accuracy']:0.4f}\n"
-            f"  Precision: {test_results_1['precision']:0.4f}\n"
-            f"  Recall: {test_results_1['recall']:0.4f}\n"
-            f"  F1: {test_results_1['f1']:0.4f}\n"
+            '** Test results **\n'
+            f'  Loss: {test_results_1["loss"]:0.4f}\n'
+            f'  Accuracy: {test_results_1["accuracy"]:0.4f}\n'
+            f'  Precision: {test_results_1["precision"]:0.4f}\n'
+            f'  Recall: {test_results_1["recall"]:0.4f}\n'
+            f'  F1: {test_results_1["f1"]:0.4f}\n'
         )
-        print("  Per class results (acc | pre | recall | f1):")
+        print('  Per class results (acc | pre | recall | f1):')
         for i, class_name in enumerate(class_names):
             print(
-                f"    {class_name}: {test_results_1['per_class_accuracy'][i]:0.4f} |"
-                f"{test_results_1['per_class_precision'][i]:0.4f} |"
-                f"{test_results_1['per_class_recall'][i]:0.4f} |"
-                f"{test_results_1['per_class_f1'][i]:0.4f}"
+                f'    {class_name}: {test_results_1["per_class_accuracy"][i]:0.4f} |'
+                f'{test_results_1["per_class_precision"][i]:0.4f} |'
+                f'{test_results_1["per_class_recall"][i]:0.4f} |'
+                f'{test_results_1["per_class_f1"][i]:0.4f}'
             )
 
         return
@@ -258,22 +260,25 @@ def train_model(args: argparse.Namespace) -> None:
             decay=args.model_ema_decay,
             use_warmup=args.model_ema_warmup,
         )
-        logger.info("EMA enabled")
+        logger.info('EMA enabled')
 
     global_step = 0
-    training_loss_1 = AverageMeter(name="training_loss_1", fmt=":0.4f")
-    training_loss_2 = AverageMeter(name="training_loss_2", fmt=":0.4f")
+    training_loss_1 = AverageMeter(name='training_loss_1', fmt=':0.4f')
+    training_loss_2 = AverageMeter(name='training_loss_2', fmt=':0.4f')
     optimizer_1.zero_grad()
     optimizer_2.zero_grad()
     if args.max_grad_norm > 0:
-        logger.info(f"Using gradient clipping with max norm {args.max_grad_norm}")
+        logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
 
     # results for each metric will be sorted in decreasing order
     if args.best_checkpoint_metrics is None:
         args.best_checkpoint_metrics = []
 
     # best_val_results[metric] = list of tuples (value, checkpoint_path)
-    best_val_results: dict[str, list[tuple[float, str]]] = {
+    best_val_results_1: dict[str, list[tuple[float, str]]] = {
+        metric: [] for metric in args.best_checkpoint_metrics
+    }
+    best_val_results_2: dict[str, list[tuple[float, str]]] = {
         metric: [] for metric in args.best_checkpoint_metrics
     }
 
@@ -295,7 +300,7 @@ def train_model(args: argparse.Namespace) -> None:
 
         train_progressbar = tqdm(
             range(total_updates),
-            desc=f"Training epoch {epoch + 1}/{args.num_epochs}",
+            desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
         )
         for update_step in train_progressbar:
             num_batches = (
@@ -329,12 +334,12 @@ def train_model(args: argparse.Namespace) -> None:
                     loss_1 = Fun.cross_entropy(
                         input=logits_1[selected_indices_2],
                         target=labels[selected_indices_2],
-                        reduction="sum",
+                        reduction='sum',
                     )
                     loss_2 = Fun.cross_entropy(
                         input=logits_2[selected_indices_1],
                         target=labels[selected_indices_1],
-                        reduction="sum",
+                        reduction='sum',
                     )
                     if num_items_in_batch > 0:
                         loss_1 = loss_1 / num_items_in_batch
@@ -374,10 +379,10 @@ def train_model(args: argparse.Namespace) -> None:
 
             if wandb_run is not None:
                 log_data = {
-                    f"learning_rate/group_{group_id}": group_lr
+                    f'learning_rate/group_{group_id}': group_lr
                     for group_id, group_lr in enumerate(scheduler_1.get_last_lr())
                 }
-                log_data["train/loss"] = batch_loss_1
+                log_data['train/loss'] = batch_loss_1
                 wandb_run.log(log_data, step=global_step)
 
             scheduler_1.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
@@ -386,8 +391,8 @@ def train_model(args: argparse.Namespace) -> None:
             training_loss_1.update(batch_loss_1, num_items_in_batch)
             training_loss_2.update(batch_loss_2, num_items_in_batch)
             train_progressbar.set_postfix({
-                "loss_1": f"{batch_loss_1:0.4f}",
-                "loss_2": f"{batch_loss_2:0.4f}",
+                'loss_1': f'{batch_loss_1:0.4f}',
+                'loss_2': f'{batch_loss_2:0.4f}',
             })
             global_step += 1
 
@@ -405,15 +410,15 @@ def train_model(args: argparse.Namespace) -> None:
             num_classes=num_classes,
         )
 
-        print_eval_results(eval_results=val_results_1, prefix="val_1", epoch=epoch + 1)
-        print_eval_results(eval_results=val_results_2, prefix="val_2", epoch=epoch + 1)
+        print_eval_results(eval_results=val_results_1, prefix='val_1', epoch=epoch + 1)
+        print_eval_results(eval_results=val_results_2, prefix='val_2', epoch=epoch + 1)
 
-        assert len(val_results_1["per_class_accuracy"]) == num_classes
-        assert len(val_results_2["per_class_accuracy"]) == num_classes
+        assert len(val_results_1['per_class_accuracy']) == num_classes
+        assert len(val_results_2['per_class_accuracy']) == num_classes
         maybe_log_eval_results(
             eval_results=val_results_1,
             epoch=epoch,
-            prefix="val_1",
+            prefix='val_1',
             class_names=class_names,
             wandb_run=wandb_run,
             wandb_log_step=global_step,
@@ -421,7 +426,7 @@ def train_model(args: argparse.Namespace) -> None:
         maybe_log_eval_results(
             eval_results=val_results_2,
             epoch=epoch,
-            prefix="val_2",
+            prefix='val_2',
             class_names=class_names,
             wandb_run=wandb_run,
             wandb_log_step=global_step,
@@ -440,15 +445,15 @@ def train_model(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        print_eval_results(eval_results=test_results_1, prefix="test_1", epoch=epoch + 1)
-        print_eval_results(eval_results=test_results_2, prefix="test_2", epoch=epoch + 1)
+        print_eval_results(eval_results=test_results_1, prefix='test_1', epoch=epoch + 1)
+        print_eval_results(eval_results=test_results_2, prefix='test_2', epoch=epoch + 1)
 
-        assert len(test_results_1["per_class_accuracy"]) == num_classes
-        assert len(test_results_2["per_class_accuracy"]) == num_classes
+        assert len(test_results_1['per_class_accuracy']) == num_classes
+        assert len(test_results_2['per_class_accuracy']) == num_classes
         maybe_log_eval_results(
             eval_results=test_results_1,
             epoch=epoch,
-            prefix="test_1",
+            prefix='test_1',
             class_names=class_names,
             wandb_run=wandb_run,
             wandb_log_step=global_step,
@@ -456,7 +461,7 @@ def train_model(args: argparse.Namespace) -> None:
         maybe_log_eval_results(
             eval_results=test_results_2,
             epoch=epoch,
-            prefix="test_2",
+            prefix='test_2',
             class_names=class_names,
             wandb_run=wandb_run,
             wandb_log_step=global_step,
@@ -465,105 +470,54 @@ def train_model(args: argparse.Namespace) -> None:
         # saving checkpoint
         checkpoint_path_1 = os.path.join(
             checkpoint_dir,
-            f"model_1_epoch_{epoch + 1}.pth",
+            f'model_1_epoch_{epoch + 1}.pth',
         )
-        torch.save(
-            {
-                "model_state_dict": model_1.state_dict(),
-                "val_results": val_results_1,
-                "epoch": epoch,
-                "global_step": global_step,
-            },
-            checkpoint_path_1,
-        )
-        # saving checkpoint
         checkpoint_path_2 = os.path.join(
             checkpoint_dir,
-            f"model_2_epoch_{epoch + 1}.pth",
+            f'model_2_epoch_{epoch + 1}.pth',
         )
-        torch.save(
-            {
-                "model_state_dict": model_2.state_dict(),
-                "val_results": val_results_2,
-                "epoch": epoch,
-                "global_step": global_step,
-            },
-            checkpoint_path_2,
+        state_dict_to_save_1 = {
+            'model_state_dict': model_1.state_dict(),
+            'val_results': val_results_1,
+            'epoch': epoch,
+            'global_step': global_step,
+        }
+        state_dict_to_save_2 = {
+            'model_state_dict': model_2.state_dict(),
+            'val_results': val_results_2,
+            'epoch': epoch,
+            'global_step': global_step,
+        }
+
+        torch.save(state_dict_to_save_1, checkpoint_path_1)
+        torch.save(state_dict_to_save_2, checkpoint_path_2)
+
+        save_top_k_checkpoints(
+            criterion_metrics=args.best_checkpoint_metrics,
+            top_k=args.save_best_k,
+            val_results=val_results_1,
+            best_val_results=best_val_results_1,
+            state_dict_to_save=state_dict_to_save_1,
+            checkpoint_path_template=os.path.join(
+                checkpoint_dir, f'model_1_epoch_{epoch}_{{metric}}_{{metric_value:.4f}}.pth'
+            ),
         )
 
-        # TODO: save best checkpoints for model_2 also
-        for metric in args.best_checkpoint_metrics:
-            current_metric_value = val_results_1[metric]
-            if metric == "loss":
-                # For loss, we want to save the lowest value, so we negate it
-                current_metric_value = -current_metric_value
-
-            current_checkpoint_path = os.path.join(
-                checkpoint_dir,
-                f"model_1_epoch_{epoch}_{metric}_{abs(current_metric_value):.4f}.pth",
-            )
-
-            if len(best_val_results[metric]) < args.save_best_k:
-                # If we haven't saved args.save_best_k checkpoints yet, just add this one.
-                # Store the actual positive metric value.
-                heapq.heappush(
-                    best_val_results[metric],
-                    (current_metric_value, current_checkpoint_path),
-                )
-
-                # Save the model state and other relevant information
-                torch.save(
-                    {
-                        "model_state_dict": model_1.state_dict(),
-                        "val_results": val_results_1,
-                        "epoch": epoch,
-                        "global_step": global_step,
-                    },
-                    current_checkpoint_path,
-                )
-                logger.info(
-                    f"Saved checkpoint for {metric}: {abs(current_metric_value):.4f} to {current_checkpoint_path}"
-                )
-            else:
-                # If we already have args.save_best_k checkpoints, check if the current one is better than the worst of them.
-                # The worst of the k is at the top of the min-heap (best_val_results[metric][0]).
-                worst_of_k_value = best_val_results[metric][0][
-                    0
-                ]  # This correctly gets the smallest (worst) value in the heap
-
-                if current_metric_value > worst_of_k_value:
-                    # Current checkpoint is better, so replace the worst one in the heap
-                    # heapq.heapreplace pops the smallest item and then pushes the new item
-                    old_worst_checkpoint_tuple = heapq.heapreplace(
-                        best_val_results[metric],
-                        (current_metric_value, current_checkpoint_path),
-                    )
-                    old_worst_path = old_worst_checkpoint_tuple[1]
-
-                    # Delete the old worst checkpoint file from disk
-                    if os.path.exists(old_worst_path):
-                        os.remove(old_worst_path)
-                        print(f"Deleted old worst checkpoint: {old_worst_path}")
-
-                    # Save the new better checkpoint
-                    torch.save(
-                        {
-                            "model_state_dict": model_1.state_dict(),
-                            "val_results": val_results_1,
-                            "epoch": epoch,
-                            "global_step": global_step,
-                        },
-                        current_checkpoint_path,
-                    )
-                    logger.info(
-                        f"Replaced checkpoint for {metric}: {abs(current_metric_value):.4f} "
-                        f"(old worst: {abs(worst_of_k_value):.4f}) to {current_checkpoint_path}",
-                    )
+        save_top_k_checkpoints(
+            criterion_metrics=args.best_checkpoint_metrics,
+            top_k=args.save_best_k,
+            val_results=val_results_2,
+            best_val_results=best_val_results_2,
+            state_dict_to_save=state_dict_to_save_2,
+            checkpoint_path_template=os.path.join(
+                checkpoint_dir, f'model_2_epoch_{epoch}_{{metric}}_{{metric_value:.4f}}.pth'
+            ),
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Training model with Co-Teaching",
+        description='Training model with Co-Teaching',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     add_training_with_co_teaching_opts(parser)
@@ -572,5 +526,5 @@ def main():
     train_model(args)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

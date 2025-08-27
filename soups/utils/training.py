@@ -1,5 +1,7 @@
+import heapq
+import os
 from contextlib import nullcontext
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import timm
 import torch
@@ -12,6 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm
 from wandb.sdk.wandb_run import Run as WandbRun
 
+from soups.utils.logger import logger
 from soups.utils.metric import AverageMeter
 
 
@@ -25,6 +28,7 @@ class EvalResults(TypedDict):
     per_class_precision: list[float]
     per_class_recall: list[float]
     per_class_f1: list[float]
+
 
 def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn.Module:
     model_name = model_name.lower()
@@ -42,13 +46,17 @@ def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn
         model_classifier = model.classifier
     elif model_name.startswith('timm/'):
         model = timm.create_model(
-            model_name[len('timm/'):],
+            model_name[len('timm/') :],
             pretrained=pretrained,
             num_classes=num_classes,
         )
         if hasattr(model, 'head') and isinstance(model.head, nn.Linear):
             model_classifier = model.head
-        elif hasattr(model, 'head') and hasattr(model.head, 'fc') and isinstance(model.head.fc, nn.Linear):
+        elif (
+            hasattr(model, 'head')
+            and hasattr(model.head, 'fc')
+            and isinstance(model.head.fc, nn.Linear)
+        ):
             model_classifier = model.head.fc
         else:
             raise ValueError(f'Unable to determine classification head for model {model_name}')
@@ -61,6 +69,7 @@ def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn
         nn.init.zeros_(model_classifier.bias)
 
     return model
+
 
 def eval_model(
     model: nn.Module,
@@ -145,6 +154,99 @@ def eval_model(
         'per_class_f1': per_class_f1.tolist(),  # pyright: ignore[reportAttributeAccessIssue]
     }
 
+
+def save_top_k_checkpoints(
+    criterion_metrics: list[str],
+    top_k: int,
+    val_results: EvalResults,
+    best_val_results: dict[str, list[tuple[float, str]]],
+    state_dict_to_save: dict[str, Any],
+    checkpoint_path_template: str,
+) -> None:
+    """
+    Save the top-k model checkpoints based on validation metrics.
+
+    This function implements a checkpoint management strategy that
+    maintains only the top-k best checkpoints for each specified metric.
+    It uses a min-heap data structure to efficiently track and manage
+    the best performing models, automatically removing worse checkpoints
+    when the limit is exceeded.
+
+    Behavior:
+        - For each metric in `criterion_metrics`, evaluates if the current model performance
+          warrants saving a checkpoint
+        - For loss metrics, uses negative values to maintain consistent "higher is better" semantics
+        - Maintains up to `top_k` checkpoints per metric using a min-heap
+        - When the checkpoint limit is reached, replaces the worst checkpoint if current performance is better
+        - Automatically deletes old checkpoint files from disk when they are replaced
+        - Saves complete checkpoint state including model weights, validation results, epoch, and global step
+
+    File Naming:
+        Checkpoint files are named as: "model_1_epoch_{epoch}_{metric}_{metric_value:.4f}.pth"
+
+    Note:
+        - The function modifies best_val_results in-place to maintain state across training epochs
+        - Loss values are negated internally for heap operations but displayed as positive values in logs
+        - Only saves checkpoints that are among the top-k performing for their respective metrics
+    """
+    for metric in criterion_metrics:
+        current_metric_value = val_results[metric]
+        if metric == 'loss':
+            # For loss, we want to save the lowest value, so we negate it
+            current_metric_value = -current_metric_value
+
+        current_checkpoint_path = checkpoint_path_template.format(
+            metric=metric, metric_value=abs(current_metric_value)
+        )
+
+        if len(best_val_results[metric]) < top_k:
+            # If we haven't saved `top_k`` checkpoints yet, just add this one.
+            # Store the actual positive metric value.
+            heapq.heappush(
+                best_val_results[metric],
+                (current_metric_value, current_checkpoint_path),
+            )
+
+            # Save the model state and other relevant information
+            torch.save(
+                state_dict_to_save,
+                current_checkpoint_path,
+            )
+            logger.info(
+                f'Saved checkpoint for {metric}: {abs(current_metric_value):.4f} to {current_checkpoint_path}'
+            )
+        else:
+            # If we already have args.save_best_k checkpoints, check if the current one is better than the worst of them.
+            # The worst of the k is at the top of the min-heap (best_val_results[metric][0]).
+            worst_of_k_value = best_val_results[metric][0][
+                0
+            ]  # This correctly gets the smallest (worst) value in the heap
+
+            if current_metric_value > worst_of_k_value:
+                # Current checkpoint is better, so replace the worst one in the heap
+                # heapq.heapreplace pops the smallest item and then pushes the new item
+                old_worst_checkpoint_tuple = heapq.heapreplace(
+                    best_val_results[metric],
+                    (current_metric_value, current_checkpoint_path),
+                )
+                old_worst_path = old_worst_checkpoint_tuple[1]
+
+                # Delete the old worst checkpoint file from disk
+                if os.path.exists(old_worst_path):
+                    os.remove(old_worst_path)
+                    print(f'Deleted old worst checkpoint: {old_worst_path}')
+
+                # Save the new better checkpoint
+                torch.save(
+                    state_dict_to_save,
+                    current_checkpoint_path,
+                )
+                logger.info(
+                    f'Replaced checkpoint for {metric}: {abs(current_metric_value):.4f} '
+                    f'(old worst: {abs(worst_of_k_value):.4f}) to {current_checkpoint_path}',
+                )
+
+
 def maybe_log_eval_results(
     eval_results: EvalResults,
     epoch: int,
@@ -162,7 +264,7 @@ def maybe_log_eval_results(
         class_names = [f'class_{i}' for i in range(num_classes)]
 
     log_data = {
-        f'{prefix}/loss': eval_results["loss"],
+        f'{prefix}/loss': eval_results['loss'],
         f'{prefix}/accuracy': eval_results['accuracy'],
         f'{prefix}/precision': eval_results['precision'],
         f'{prefix}/recall': eval_results['recall'],
@@ -175,6 +277,7 @@ def maybe_log_eval_results(
         # but currently I think it is a bit messy.
 
     wandb_run.log(log_data, step=wandb_log_step)
+
 
 def print_eval_results(
     eval_results: EvalResults,
@@ -194,15 +297,16 @@ def print_eval_results(
         f'{prefix}_f1 {eval_results["f1"]:0.4f}'
     )
 
+
 def select_samples_for_co_teaching(
     logits_1: Tensor, logits_2: Tensor, labels: Tensor, forget_rate: float
 ) -> tuple[Tensor, Tensor]:
     """
     Select samples from the two models based on the cross-entropy loss for Co-Teaching.
     """
-    loss_1 = Fun.cross_entropy(input=logits_1, target=labels, reduction="none")
+    loss_1 = Fun.cross_entropy(input=logits_1, target=labels, reduction='none')
     indices_1 = torch.argsort(loss_1)
-    loss_2 = Fun.cross_entropy(input=logits_2, target=labels, reduction="none")
+    loss_2 = Fun.cross_entropy(input=logits_2, target=labels, reduction='none')
     indices_2 = torch.argsort(loss_2)
 
     num_remembers = int((1.0 - forget_rate) * len(indices_1))
@@ -211,4 +315,3 @@ def select_samples_for_co_teaching(
     selected_indices_2 = indices_2[:num_remembers]
 
     return selected_indices_1, selected_indices_2
-
