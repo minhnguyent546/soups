@@ -30,6 +30,9 @@ dev = [
 [tool.ruff]
 line-length = 99
 target-version = "py312"
+exclude = [
+    "./thirdparty/"
+]
 
 [tool.ruff.lint]
 select = [

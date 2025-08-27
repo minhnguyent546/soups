@@ -16,11 +16,10 @@ from tqdm.autonotebook import tqdm
 import soups.utils as utils
 import soups.utils.dist as dist_fun
 from soups.opts import add_visualize_with_mds_opts
-from soups.thirdparty.mds import landmark_MDS
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
 from soups.utils.training import make_model
-
+from thirdparty.mds import landmark_MDS
 
 def visualize_predictions(args: argparse.Namespace) -> None:
     init_logger(compact=True)
