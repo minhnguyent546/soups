@@ -19,27 +19,48 @@ dependencies = [
     "pyyaml>=6.0.2",
     "matplotlib>=3.10.3",
     "scienceplots>=2.1.1",
+    "numpy>=2.2.6",
 ]
 
 [dependency-groups]
 dev = [
-    "autoflake>=2.3.1",
-    "isort[colors]>=6.0.1",
-    "tabulate>=0.9.0",
+    "ruff>=0.12.10",
 ]
 
-[tool.autoflake]
-in-place = true
-recursive = true
-expand-star-imports = true
-remove-all-unused-imports = true
-ignore-init-module-imports = true
-remove-unused-variables = true
+[tool.ruff]
+line-length = 99
+target-version = "py312"
 
-[tool.isort]
-extend_skip = ["soups/thirdparty"]
-skip_gitignore = true
-multi_line_output = 3
-line_length = 88
-include_trailing_comma = true
-color_output = true
+[tool.ruff.lint]
+select = [
+    "B",      # flake8-bugbear
+    "C",      # comple-structure
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "I",      # isort
+    "W",      # pycodestyle warnings
+    "RUF013", # implicit-optional
+    "UP006",  # non-pep585-annotation (e.g. `list[int]` instead of `List[int]`)
+]
+extend-safe-fixes = ["UP006"]
+ignore = [
+    "C901", # complex-structure
+    "E101", # mixed-spaces-and-tabs
+    "E501", # line-too-long
+    "E741", # ambiguous-variable-name
+    "F402", # import-shadowed-by-loop-var
+    "F823", # undefined-local
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = [
+    "E402", # module-import-not-at-top-of-file
+    "F401", # unused-import
+    "F403", # undefined-local-with-import-star
+]
+
+[tool.ruff.format]
+preview = true
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
