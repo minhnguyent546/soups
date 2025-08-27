@@ -16,10 +16,10 @@ from tqdm.autonotebook import tqdm
 import soups.utils as utils
 import soups.utils.dist as dist_fun
 from soups.opts import add_visualize_with_mds_opts
-from soups.thirdparty.mds import landmark_MDS
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
 from soups.utils.training import make_model
+from thirdparty.mds import landmark_MDS
 
 
 def visualize_predictions(args: argparse.Namespace) -> None:
@@ -28,8 +28,11 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     logger.info(f'Using seed: {args.seed}')
 
     device = torch.device(
-        'cuda' if torch.cuda.is_available() else
-        'mps' if torch.backends.mps.is_available() else 'cpu',
+        'cuda'
+        if torch.cuda.is_available()
+        else 'mps'
+        if torch.backends.mps.is_available()
+        else 'cpu',
     )
     logger.info(f'Using device: {device}')
 
@@ -46,16 +49,10 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     model_paths: list[str] = []
     greedy_checkpoint_idx = None
     uniform_checkpoint_idx = None
-    if (
-        args.greedy_soup_checkpoint is not None and
-        args.greedy_soup_checkpoint.endswith('.pth')
-    ):
+    if args.greedy_soup_checkpoint is not None and args.greedy_soup_checkpoint.endswith('.pth'):
         model_paths.append(args.greedy_soup_checkpoint)
         greedy_checkpoint_idx = len(model_paths) - 1
-    if (
-        args.uniform_soup_checkpoint is not None and
-        args.uniform_soup_checkpoint.endswith('.pth')
-    ):
+    if args.uniform_soup_checkpoint is not None and args.uniform_soup_checkpoint.endswith('.pth'):
         model_paths.append(args.uniform_soup_checkpoint)
         uniform_checkpoint_idx = len(model_paths) - 1
 
@@ -64,8 +61,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
             model_paths.append(model_path)
         elif os.path.isdir(model_path):
             model_paths.extend(
-                os.path.join(model_path, f)
-                for f in os.listdir(model_path) if f.endswith('.pth')
+                os.path.join(model_path, f) for f in os.listdir(model_path) if f.endswith('.pth')
             )
 
     model_paths = list(set(model_paths))  # remove duplicates
@@ -103,7 +99,9 @@ def visualize_predictions(args: argparse.Namespace) -> None:
 
     all_probs_list: list[list[list[float]]] = []
     accuracies: list[float] = []
-    all_logits_list: list[list[int]] = []  # for soft voting (excluding greedy and uniform checkpoints)
+    all_logits_list: list[
+        list[int]
+    ] = []  # for soft voting (excluding greedy and uniform checkpoints)
     model = make_model(
         model_name=args.model,
         num_classes=num_classes,
@@ -196,7 +194,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
             dissimilarity='precomputed',
         )
 
-        embeddings = embedding.fit_transform(dist)
+        embeddings = embedding.fit_transform(dist)  # pyright: ignore[reportArgumentType]
 
     annotations = [f'{acc * 100:0.2f}' for acc in accuracies]
     plot_embeddings(
@@ -208,6 +206,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
         save_path=args.output_file,
         show=False,
     )
+
 
 def plot_embeddings(
     embeddings: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
@@ -241,20 +240,32 @@ def plot_embeddings(
     if greedy_soup_idx is not None and greedy_soup_idx < embeddings.shape[0]:
         exclude_indices.append(greedy_soup_idx)
         plt.scatter(
-            embeddings[greedy_soup_idx, 0], embeddings[greedy_soup_idx, 1],
-            c='red', s=75, alpha=0.5, label='Greedy Model',
+            embeddings[greedy_soup_idx, 0],
+            embeddings[greedy_soup_idx, 1],
+            c='red',
+            s=75,
+            alpha=0.5,
+            label='Greedy Model',
         )
     if uniform_soup_idx is not None and uniform_soup_idx < embeddings.shape[0]:
         exclude_indices.append(uniform_soup_idx)
         plt.scatter(
-            embeddings[uniform_soup_idx, 0], embeddings[uniform_soup_idx, 1],
-            c='green', s=75, alpha=0.5, label='Uniform Model',
+            embeddings[uniform_soup_idx, 0],
+            embeddings[uniform_soup_idx, 1],
+            c='green',
+            s=75,
+            alpha=0.5,
+            label='Uniform Model',
         )
     if soft_voting_idx is not None and soft_voting_idx < embeddings.shape[0]:
         exclude_indices.append(soft_voting_idx)
         plt.scatter(
-            embeddings[soft_voting_idx, 0], embeddings[soft_voting_idx, 1],
-            c='orange', s=75, alpha=0.5, label='Soft Voting Model',
+            embeddings[soft_voting_idx, 0],
+            embeddings[soft_voting_idx, 1],
+            c='orange',
+            s=75,
+            alpha=0.5,
+            label='Soft Voting Model',
         )
 
     # plot remaining embeddings
@@ -262,8 +273,12 @@ def plot_embeddings(
         embeddings = np.delete(embeddings, exclude_indices, axis=0)
     if embeddings.shape[0] > 0:
         plt.scatter(
-            embeddings[:, 0], embeddings[:, 1],
-            c='blue', s=75, alpha=0.5, label='Ingredient Models',
+            embeddings[:, 0],
+            embeddings[:, 1],
+            c='blue',
+            s=75,
+            alpha=0.5,
+            label='Ingredient Models',
         )
 
     plt.legend()
@@ -277,6 +292,7 @@ def plot_embeddings(
 
     if show:
         plt.show()
+
 
 def main():
     parser = argparse.ArgumentParser(

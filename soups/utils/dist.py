@@ -19,6 +19,7 @@ def cross_entropy_dist(
     term = p_clamped * torch.log(q_clamped) + q_clamped * torch.log(p_clamped)
     return -torch.sum(term, dim=1).mean()
 
+
 def pairwise_cross_entropy_dist(
     p: torch.Tensor,
     q: torch.Tensor | None = None,
@@ -57,8 +58,11 @@ if __name__ == '__main__':
     print(p)
     print(q)
 
-    print("Cross-entropy distance:", cross_entropy_dist(p, q))
+    print('Cross-entropy distance:', cross_entropy_dist(p, q))
 
     tensor_list1 = torch.stack([p, q])
     tensor_list2 = torch.stack([p, p, q])
-    print("Pairwise cross-entropy distances:\n", pairwise_cross_entropy_dist(tensor_list1, tensor_list2))
+    print(
+        'Pairwise cross-entropy distances:\n',
+        pairwise_cross_entropy_dist(tensor_list1, tensor_list2),
+    )

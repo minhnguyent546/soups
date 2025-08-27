@@ -10,6 +10,7 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
     _add_training_opts(parser)
     _add_wandb_opts(parser)
 
+
 def add_training_with_co_teaching_opts(parser: argparse.ArgumentParser) -> None:
     """
     All options used for training the model with Co-Teaching.
@@ -18,6 +19,7 @@ def add_training_with_co_teaching_opts(parser: argparse.ArgumentParser) -> None:
     _add_training_opts(parser)
     _add_co_teaching_opts(parser)
     _add_wandb_opts(parser)
+
 
 def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -72,6 +74,7 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         default='./soups_results',
     )
 
+
 def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--seed',
@@ -109,6 +112,7 @@ def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
         help='File to save the evaluation results (.json file)',
         default='./test_results.json',
     )
+
 
 def add_visualize_with_mds_opts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -177,6 +181,7 @@ def add_visualize_with_mds_opts(parser: argparse.ArgumentParser) -> None:
         default='./vis_result.pdf',
     )
 
+
 def _add_general_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('General')
     group.add_argument(
@@ -197,6 +202,7 @@ def _add_general_opts(parser: argparse.ArgumentParser) -> None:
         help='Path to the dataset',
         default='./data/ICH-17',
     )
+
 
 def _add_training_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Training')
@@ -352,6 +358,7 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         default=0.0,
     )
 
+
 def _add_co_teaching_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Co-Teaching')
     group.add_argument(
@@ -372,6 +379,7 @@ def _add_co_teaching_opts(parser: argparse.ArgumentParser) -> None:
         help='Exponent of the forget rate, can be 0.5, 1, 2. This parameter is equal to c in Tc for R(T) in Co-teaching paper.',
         default=1,
     )
+
 
 def _add_wandb_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('Wandb')
