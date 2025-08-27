@@ -22,14 +22,17 @@ def accuracy_k(outputs: torch.Tensor, labels: torch.Tensor, topk=(1,)):
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
 
+
 class Summary(Enum):
     NONE = 0
     AVERAGE = 1
     SUM = 2
     COUNT = 3
 
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self, name, fmt=':f', summary_type=Summary.AVERAGE):
         self.name = name
         self.fmt = fmt
@@ -54,11 +57,11 @@ class AverageMeter(object):
 
     def all_reduce(self):
         if torch.cuda.is_available():
-            device = torch.device("cuda")
+            device = torch.device('cuda')
         elif torch.backends.mps.is_available():
-            device = torch.device("mps")
+            device = torch.device('mps')
         else:
-            device = torch.device("cpu")
+            device = torch.device('cpu')
         total = torch.tensor([self.sum, self.count], dtype=torch.float32, device=device)
         dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
         self.sum, self.count = total.tolist()

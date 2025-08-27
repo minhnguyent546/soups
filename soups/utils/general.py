@@ -32,6 +32,7 @@ def save_metadata_to_checkpoint(
     with open(metadata_path, 'w') as f:
         yaml.dump(metadata, f, default_flow_style=False)
 
+
 def set_seed(seed: int = 42) -> None:
     os.environ['PYTHONHASHSEED'] = str(seed)
     random.seed(seed)
@@ -41,8 +42,10 @@ def set_seed(seed: int = 42) -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+
 def is_tensor_or_np(obj: Any) -> bool:
     return isinstance(obj, (torch.Tensor, np.ndarray))
+
 
 def get_batch_samples(
     data_iter,
@@ -78,7 +81,9 @@ def get_batch_samples(
     # do not support list or numpy array
     labels_id = labels_key or labels_index
     if not isinstance(batch_samples[0][labels_id], torch.Tensor):
-        raise ValueError(f'Expected labels in batch samples to be of type torch.Tensor, found type {type(batch_samples[0][labels_id])}')
+        raise ValueError(
+            f'Expected labels in batch samples to be of type torch.Tensor, found type {type(batch_samples[0][labels_id])}'
+        )
 
     if batch_samples[0][labels_id].ndim == 1:
         num_items_in_batch = sum(
@@ -87,7 +92,6 @@ def get_batch_samples(
         )
     else:
         num_items_in_batch = sum(
-            batch_sample[labels_id].shape[0]
-            for batch_sample in batch_samples
+            batch_sample[labels_id].shape[0] for batch_sample in batch_samples
         )
     return batch_samples, num_items_in_batch

@@ -20,6 +20,7 @@ class Candidate:
     model_path: str
     eval_results: EvalResults
 
+
 def test_with_model_soups(args: argparse.Namespace) -> None:
     if os.path.isdir(args.output_dir):
         logger.error(f'Output directory already exists: {args.output_dir}')
@@ -42,8 +43,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             model_paths.append(model_path)
         elif os.path.isdir(model_path):
             model_paths.extend(
-                os.path.join(model_path, f)
-                for f in os.listdir(model_path) if f.endswith('.pth')
+                os.path.join(model_path, f) for f in os.listdir(model_path) if f.endswith('.pth')
             )
     model_paths = list(set(model_paths))  # remove duplicates
     if not model_paths:
@@ -127,8 +127,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             model_state_dict = torch.load(model_path, map_location=device)['model_state_dict']
             if i == 0:
                 uniform_soup_params = {
-                    k: v.clone() * (1.0 / num_models)
-                    for k, v in model_state_dict.items()
+                    k: v.clone() * (1.0 / num_models) for k, v in model_state_dict.items()
                 }
             else:
                 uniform_soup_params = {
@@ -159,10 +158,13 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
         # save the soup model
         uniform_soup_model_path = os.path.join(args.output_dir, 'uniform_soup.pth')
-        torch.save({
-            'model_state_dict': uniform_soup_params,
-            'test_results': test_results,
-        }, uniform_soup_model_path)
+        torch.save(
+            {
+                'model_state_dict': uniform_soup_params,
+                'test_results': test_results,
+            },
+            uniform_soup_model_path,
+        )
 
     if args.greedy_soup:
         logger.info('** Start cooking greedy soup **')
@@ -171,7 +173,9 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             'greedy_soup_results.json',
         )
         # sort models by decreasing test accuracy
-        candidates = sorted(candidates, key=lambda item: item.eval_results['accuracy'], reverse=True)
+        candidates = sorted(
+            candidates, key=lambda item: item.eval_results['accuracy'], reverse=True
+        )
 
         result_data = {}
         result_data['models'] = {}
@@ -196,8 +200,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             )['model_state_dict']
             num_ingredients = len(greedy_soup_ingredients)
             potential_greedy_soup_params = {
-                k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1.)) +
-                new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
+                k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1.0))
+                + new_ingredient_params[k].clone() * (1.0 / (num_ingredients + 1))
                 for k in new_ingredient_params
             }
 
@@ -252,10 +256,14 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
         # save the soup model
         greedy_soup_model_path = os.path.join(args.output_dir, 'greedy_soup.pth')
-        torch.save({
-            'model_state_dict': greedy_soup_params,
-            'test_results': test_results,
-        }, greedy_soup_model_path)
+        torch.save(
+            {
+                'model_state_dict': greedy_soup_params,
+                'test_results': test_results,
+            },
+            greedy_soup_model_path,
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(

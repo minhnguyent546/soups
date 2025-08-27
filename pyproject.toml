@@ -64,6 +64,6 @@ ignore = [
 
 [tool.ruff.format]
 preview = true
-quote-style = "double"
+quote-style = "single"
 indent-style = "space"
 line-ending = "lf"

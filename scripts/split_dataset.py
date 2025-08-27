@@ -80,7 +80,9 @@ def make_dataset_splits(args: argparse.Namespace) -> None:
     split_names = ['train', 'test', 'val']
 
     # save the splits
-    for split, indices in zip(split_names, [train_indices, test_indices, val_indices]):
+    for split, indices in zip(
+        split_names, [train_indices, test_indices, val_indices], strict=True
+    ):
         split_dir = os.path.join(args.output_dir, split)
         os.makedirs(split_dir, exist_ok=True)
         for class_name in dataset.classes:

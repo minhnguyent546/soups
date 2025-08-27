@@ -25,11 +25,12 @@ def check_imports(args: argparse.Namespace) -> None:
         try:
             spec.loader.exec_module(module)
             num_files += 1
-        except Exception as e:
-            print(f'Error importing {module_name}: {e}', file=sys.stderr)
-            raise SystemExit(1)
+        except Exception as err:
+            print(f'Error importing {module_name}: {err}', file=sys.stderr)
+            raise SystemExit(1) from err
 
     print(f'All {num_files} imports checked successfully.')
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
