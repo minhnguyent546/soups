@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader, WeightedRandomSampler, default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
+import soups.utils.balanced_mixup as balanced_mixup_utils
 import wandb
 from soups.opts import add_training_opts
 from soups.utils.logger import init_logger, logger
@@ -85,6 +86,10 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # class weighting for train_dataset
+    if args.class_weighting and args.use_balanced_mixup:
+        raise ValueError(
+            'Cannot use both `--class_weighting` and `--use_balanced_mixup` at the same time'
+        )
     train_sampler = None
     if args.class_weighting:
         logger.info('Computing class weights for train_dataset')
@@ -95,29 +100,62 @@ def train_model(args: argparse.Namespace) -> None:
         train_sampler = WeightedRandomSampler(
             weights=train_samples_weights, num_samples=len(train_samples_weights), replacement=True
         )
+    elif args.use_balanced_mixup:
+        train_sampler = balanced_mixup_utils.get_data_loader_sampler(
+            labels=train_dataset.targets, mode='class'
+        )
 
     # CutMiX & MixUp
     if args.use_mixup_cutmix:
         logger.info('MixUp & CutMix enabled')
         cutmix = v2.CutMix(alpha=args.cutmix_alpha, num_classes=num_classes)
         mixup = v2.MixUp(alpha=args.mixup_alpha, num_classes=num_classes)
-        cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
+        cutmix_or_mixup_func = v2.RandomChoice([cutmix, mixup])
+    elif args.use_balanced_mixup:
+        cutmix_or_mixup_func = balanced_mixup_utils.BalancedMixUpTransform(
+            alpha=args.mixup_alpha, num_classes=num_classes
+        )
     else:
-        cutmix_or_mixup = v2.Identity()
+        cutmix_or_mixup_func = v2.Identity()
 
     def collate_fn(batch):
-        return cutmix_or_mixup(*default_collate((batch)))
+        return cutmix_or_mixup_func(*default_collate((batch)))
 
     # creating data loaders
-    train_data_loader = DataLoader(
-        train_dataset,
-        batch_size=args.train_batch_size,
-        shuffle=(train_sampler is None),
-        num_workers=args.num_workers,
-        pin_memory=True,
-        collate_fn=collate_fn,
-        persistent_workers=True,
-    )
+    if args.use_balanced_mixup:
+        imbalanced_train_data_loader = DataLoader(
+            train_dataset,
+            batch_size=args.train_batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            collate_fn=collate_fn,
+            persistent_workers=True,
+        )
+        balanced_train_data_loader = DataLoader(
+            train_dataset,
+            batch_size=args.train_batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            sampler=train_sampler,
+            collate_fn=collate_fn,
+            persistent_workers=True,
+        )
+        train_data_loader = balanced_mixup_utils.ComboDataLoader(
+            loaders=[imbalanced_train_data_loader, balanced_train_data_loader]
+        )
+    else:
+        train_data_loader = DataLoader(
+            train_dataset,
+            batch_size=args.train_batch_size,
+            shuffle=(train_sampler is None),
+            num_workers=args.num_workers,
+            pin_memory=True,
+            sampler=train_sampler,
+            collate_fn=collate_fn,
+            persistent_workers=True,
+        )
     test_data_loader = DataLoader(
         test_dataset,
         batch_size=args.eval_batch_size,
