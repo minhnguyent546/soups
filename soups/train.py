@@ -6,7 +6,6 @@ import torch
 import torch.nn.functional as Fun
 import torchvision
 import torchvision.transforms.v2 as v2
-import wandb
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
@@ -14,6 +13,7 @@ from torch.utils.data import DataLoader, default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
+import wandb
 from soups.opts import add_training_opts
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
@@ -86,8 +86,8 @@ def train_model(args: argparse.Namespace) -> None:
     # CutMiX & MixUp
     if args.use_mixup_cutmix:
         logger.info('MixUp & CutMix enabled')
-        cutmix = v2.CutMix(alpha=1.0, num_classes=num_classes)
-        mixup = v2.MixUp(alpha=1.0, num_classes=num_classes)
+        cutmix = v2.CutMix(alpha=args.cutmix_alpha, num_classes=num_classes)
+        mixup = v2.MixUp(alpha=args.mixup_alpha, num_classes=num_classes)
         cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
     else:
         cutmix_or_mixup = v2.Identity()

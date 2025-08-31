@@ -352,6 +352,18 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to use MixUp & CutMiX',
     )
     group.add_argument(
+        '--mixup_alpha',
+        type=float,
+        help='MixUp alpha (recommended values are 0.1 to 0.4)',
+        default=0.2,
+    )
+    group.add_argument(
+        '--cutmix_alpha',
+        type=float,
+        help='CutMiX alpha',
+        default=1.0,
+    )
+    group.add_argument(
         '--max_grad_norm',
         type=float,
         help='Maximum gradient norm for gradient clipping',
