@@ -182,6 +182,62 @@ def add_visualize_with_mds_opts(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_self_influence_opts(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        '--seed',
+        type=int,
+        help='Seed for random number generation',
+        default=42,
+    )
+    parser.add_argument(
+        '--checkpoint_path',
+        type=str,
+        nargs='+',
+        help=(
+            'Can be either a checkpoint file (.pth file) or a directory. '
+            'In case of a directory, all of the checkpoints in that directory '
+            'will be evaluated.'
+        ),
+        required=True,
+    )
+    parser.add_argument(
+        '--output_file',
+        type=str,
+        help='Path to the output file where results will be saved',
+        default='self_influence_scores.json',
+    )
+    parser.add_argument(
+        '--model',
+        type=str,
+        help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
+        default='timm/coatnet_0_rw_224.sw_in1k',
+    )
+    parser.add_argument(
+        '--device',
+        type=str,
+        help='Which device to use for inference',
+        default='auto',
+    )
+    parser.add_argument(
+        '--dataset_dir',
+        type=str,
+        help='Path to the dataset (SHOULD be the SAME dataset used during training)',
+        default='./data/ICH-17',
+    )
+    parser.add_argument(
+        '--eval_batch_size',
+        type=int,
+        help='Batch size for evaluation',
+        default=16,
+    )
+    parser.add_argument(
+        '--num_workers',
+        type=int,
+        default=min(os.cpu_count() or 1, 16),  # too large can cause insufficient shared memory
+        help='Number of workers for data loading',
+    )
+
+
 def _add_general_opts(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group('General')
     group.add_argument(
