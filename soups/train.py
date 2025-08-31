@@ -1,5 +1,6 @@
 import argparse
 import os
+from collections import Counter
 from datetime import datetime
 
 import torch
@@ -9,7 +10,7 @@ import torchvision.transforms.v2 as v2
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
-from torch.utils.data import DataLoader, default_collate
+from torch.utils.data import DataLoader, WeightedRandomSampler, default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
@@ -83,6 +84,18 @@ def train_model(args: argparse.Namespace) -> None:
         f'val_size = {len(val_dataset)}'
     )
 
+    # class weighting for train_dataset
+    train_sampler = None
+    if args.class_weighting:
+        logger.info('Computing class weights for train_dataset')
+        train_counts = Counter([label for _, label in train_dataset])
+        train_weights = {cls: 1.0 / cnt for cls, cnt in train_counts.items()}
+        train_samples_weights = [train_weights[label] for _, label in train_dataset]
+
+        train_sampler = WeightedRandomSampler(
+            weights=train_samples_weights, num_samples=len(train_samples_weights), replacement=True
+        )
+
     # CutMiX & MixUp
     if args.use_mixup_cutmix:
         logger.info('MixUp & CutMix enabled')
@@ -99,7 +112,7 @@ def train_model(args: argparse.Namespace) -> None:
     train_data_loader = DataLoader(
         train_dataset,
         batch_size=args.train_batch_size,
-        shuffle=True,
+        shuffle=(train_sampler is None),
         num_workers=args.num_workers,
         pin_memory=True,
         collate_fn=collate_fn,

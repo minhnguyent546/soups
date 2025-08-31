@@ -347,6 +347,11 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
 
     # other
     group.add_argument(
+        '--class_weighting',
+        action='store_true',
+        help='Whether to use class weighting for the training dataset via `WeightedRandomSampler`',
+    )
+    group.add_argument(
         '--use_mixup_cutmix',
         action='store_true',
         help='Whether to use MixUp & CutMiX',
