@@ -119,6 +119,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             best_results_checkpoint_path = checkpoint_path
 
     if best_results is not None:
+        assert best_results_checkpoint_path is not None
         test_data['best_results'] = {
             'checkpoint_path': best_results_checkpoint_path,
             'loss': f'{best_results["loss"]:0.4f}',
@@ -126,11 +127,18 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             'precision': f'{best_results["precision"]:0.4f}',
             'recall': f'{best_results["recall"]:0.4f}',
             'f1': f'{best_results["f1"]:0.4f}',
-            'per_class_accuracy': best_results['per_class_accuracy'],
-            'per_class_precision': best_results['per_class_precision'],
-            'per_class_recall': best_results['per_class_recall'],
-            'per_class_f1': best_results['per_class_f1'],
         }
+        for per_class_metric in (
+            'per_class_accuracy',
+            'per_class_precision',
+            'per_class_recall',
+            'per_class_f1',
+        ):
+            test_data['best_results'][per_class_metric] = {}  # pyright: ignore[reportArgumentType]
+            for i, class_name in enumerate(class_names):
+                test_data['best_results'][per_class_metric][class_name] = (  # pyright: ignore[reportIndexIssue]
+                    f'{best_results[per_class_metric][i]:0.4f}'
+                )
     with open(args.output_file, 'w') as f:
         json.dump(test_data, f, indent=4)
 
