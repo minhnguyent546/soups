@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import torch
 import yaml
+
 from wandb.sdk.wandb_run import Run as WandbRun
 
 
@@ -94,4 +95,4 @@ def get_batch_samples(
         num_items_in_batch = sum(
             batch_sample[labels_id].shape[0] for batch_sample in batch_samples
         )
-    return batch_samples, num_items_in_batch
+    return batch_samples, num_items_in_batch  # pyright: ignore[reportReturnType]

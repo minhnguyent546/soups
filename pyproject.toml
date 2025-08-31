@@ -31,7 +31,8 @@ dev = [
 line-length = 99
 target-version = "py312"
 exclude = [
-    "./thirdparty/"
+    "./thirdparty/",
+    "./notebooks/",
 ]
 
 [tool.ruff.lint]
