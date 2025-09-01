@@ -12,10 +12,10 @@ from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm
-from wandb.sdk.wandb_run import Run as WandbRun
 
 from soups.utils.logger import logger
 from soups.utils.metric import AverageMeter
+from wandb.sdk.wandb_run import Run as WandbRun
 
 
 class EvalResults(TypedDict):
@@ -58,6 +58,12 @@ def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn
             and isinstance(model.head.fc, nn.Linear)
         ):
             model_classifier = model.head.fc
+        elif (
+            hasattr(model, 'head')
+            and hasattr(model.head, 'fc')
+            and isinstance(model.head.fc, timm.models.metaformer.MlpHead)
+        ):
+            model_classifier = model.head.fc.fc2
         else:
             raise ValueError(f'Unable to determine classification head for model {model_name}')
     else:
