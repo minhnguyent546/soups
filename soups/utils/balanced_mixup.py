@@ -4,7 +4,6 @@
 from typing import Literal
 
 import numpy as np
-import torch.nn.functional as Fun
 from torch import Tensor
 from torch.utils.data import Sampler, WeightedRandomSampler
 
@@ -86,20 +85,3 @@ class ComboDataLoader(object):
     # Customize the behavior of combining batches here.
     def combine_batch(self, batches):
         return batches
-
-
-class BalancedMixUpTransform:
-    def __init__(self, *, alpha: float = 0.2, num_classes: int):
-        self.alpha = alpha
-        self.num_classes = num_classes
-
-    def __call__(self, raw_inputs, raw_labels):
-        lamb = np.random.beta(a=self.alpha, b=1)
-        inputs, labels = raw_inputs
-        balanced_inputs, balanced_labels = raw_labels
-
-        mixed_inputs = lamb * inputs + (1 - lamb) * balanced_inputs
-        mixed_labels = lamb * Fun.one_hot(labels, self.num_classes) + (1 - lamb) * Fun.one_hot(
-            balanced_labels, self.num_classes
-        )
-        return mixed_inputs, mixed_labels
