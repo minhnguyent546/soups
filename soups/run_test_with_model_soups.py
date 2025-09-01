@@ -18,7 +18,7 @@ from soups.utils.training import EvalResults, eval_model, make_model, print_eval
 @dataclass
 class Candidate:
     model_path: str
-    eval_results: EvalResults
+    val_results: EvalResults
 
 
 def test_with_model_soups(args: argparse.Namespace) -> None:
@@ -119,7 +119,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         result_data = {}
         result_data['models'] = {}
         for candidate in candidates:
-            result_data['models'][candidate.model_path] = candidate.eval_results
+            result_data['models'][candidate.model_path] = candidate.val_results
 
         uniform_soup_params = {}
         for i, model_path in enumerate(model_paths):
@@ -174,13 +174,13 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         )
         # sort models by decreasing val accuracy
         candidates = sorted(
-            candidates, key=lambda item: item.eval_results['accuracy'], reverse=True
+            candidates, key=lambda item: item.val_results['accuracy'], reverse=True
         )
 
         result_data = {}
         result_data['models'] = {}
         for candidate in candidates:
-            result_data['models'][candidate.model_path] = candidate.eval_results
+            result_data['models'][candidate.model_path] = candidate.val_results
 
         # start the soup by using the first ingredient.
         greedy_soup_ingredients = [candidates[0].model_path]
@@ -188,7 +188,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             candidates[0].model_path,
             map_location=device,
         )['model_state_dict']
-        best_val_acc_so_far = candidates[0].eval_results['accuracy']
+        best_val_acc_so_far = candidates[0].val_results['accuracy']
 
         for i in range(1, num_models):
             logger.info(f'Trying model [{i + 1}/{num_models}] {candidates[i].model_path}')
