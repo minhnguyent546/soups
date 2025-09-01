@@ -12,10 +12,10 @@ from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm
+from wandb.sdk.wandb_run import Run as WandbRun
 
 from soups.utils.logger import logger
 from soups.utils.metric import AverageMeter
-from wandb.sdk.wandb_run import Run as WandbRun
 
 
 class EvalResults(TypedDict):

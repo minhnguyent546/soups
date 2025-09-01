@@ -56,6 +56,9 @@ ignore = [
     "F823", # undefined-local
 ]
 
+[tool.ruff.lint.isort]
+known-third-party = ["wandb"]
+
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = [
     "E402", # module-import-not-at-top-of-file
