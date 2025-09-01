@@ -167,14 +167,25 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         )
 
     if args.greedy_soup:
+        comp_metric = args.greedy_soup_comparison_metric
+        assert comp_metric in ['accuracy', 'precision', 'recall', 'f1', 'loss'], (
+            f'Invalid comparison metric: {comp_metric}'
+        )
         logger.info('** Start cooking greedy soup **')
+        logger.info(f'Comparison metric: {comp_metric}')
         greedy_soup_result_file = os.path.join(
             args.output_dir,
             'greedy_soup_results.json',
         )
-        # sort models by decreasing val accuracy
+
+        # for loss, we want to minimize it
+        if comp_metric == 'loss':
+            for candidate in candidates:
+                candidate.val_results['loss'] = -candidate.val_results['loss']
+
+        # sort models by decreasing `comp_metric`
         candidates = sorted(
-            candidates, key=lambda item: item.val_results['accuracy'], reverse=True
+            candidates, key=lambda item: item.val_results[comp_metric], reverse=True
         )
 
         result_data = {}
@@ -188,7 +199,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             candidates[0].model_path,
             map_location=device,
         )['model_state_dict']
-        best_val_acc_so_far = candidates[0].val_results['accuracy']
+        best_val_result_so_far = candidates[0].val_results[comp_metric]
 
         for i in range(1, num_models):
             logger.info(f'Trying model [{i + 1}/{num_models}] {candidates[i].model_path}')
@@ -206,38 +217,35 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             }
 
             # test the new-branch model
-            model = make_model(model_name=args.model, num_classes=num_classes).to(device)
             model.load_state_dict(potential_greedy_soup_params)
-            cur_val_accuracy = eval_model(
+            cur_val_result = eval_model(
                 model=model,
                 eval_data_loader=val_data_loader,
                 device=device,
                 num_classes=num_classes,
-            )['accuracy']
+            )[comp_metric]
+            if comp_metric == 'loss':
+                cur_val_result = -cur_val_result
 
-            # if accuracy improves, add the model to the soup
+            # if `comp_metric` improves, add the model to the soup
             logger.info(
-                f'Potential greedy soup val acc {cur_val_accuracy:0.6f}, '
-                f'best so far {best_val_acc_so_far:0.6f}.'
+                f'Potential greedy soup val {comp_metric} {abs(cur_val_result):0.6f}, '
+                f'best so far {abs(best_val_result_so_far):0.6f}.'
             )
-            if cur_val_accuracy > best_val_acc_so_far:
+            if cur_val_result > best_val_result_so_far:
                 greedy_soup_ingredients.append(candidates[i].model_path)
-                best_val_acc_so_far = cur_val_accuracy
+                best_val_result_so_far = cur_val_result
                 greedy_soup_params = potential_greedy_soup_params
                 logger.info(f'Added model {candidates[i].model_path} to greedy soup')
 
         result_data['ingredients'] = greedy_soup_ingredients
-        result_data['best_val_accuracy'] = best_val_acc_so_far
+        result_data[f'best_val_{comp_metric}'] = abs(best_val_result_so_far)
 
         # test the final greedy soup
         print('** Greedy soup ingredients: **')
         for ingredient in greedy_soup_ingredients:
             print(f'  - {ingredient}')
 
-        model = make_model(
-            model_name=args.model,
-            num_classes=num_classes,
-        ).to(device)
         model.load_state_dict(greedy_soup_params)
         test_results = eval_model(
             model=model,
@@ -252,7 +260,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         result_data['greedy_soup'] = test_results
         with open(greedy_soup_result_file, 'w') as f:
             json.dump(result_data, f, indent=4)
-        logger.info(f'Uniform soup results saved to {greedy_soup_result_file}')
+        logger.info(f'Greedy soup results saved to {greedy_soup_result_file}')
 
         # save the soup model
         greedy_soup_model_path = os.path.join(args.output_dir, 'greedy_soup.pth')
