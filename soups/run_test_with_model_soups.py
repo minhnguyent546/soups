@@ -94,11 +94,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         model_name=args.model,
         num_classes=num_classes,
     ).to(device)
-    for model_path in model_paths:
+    for i, model_path in enumerate(model_paths):
         checkpoint = torch.load(model_path, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
 
-        logger.info(f'Evaluating model: {model_path}')
+        logger.info(f'Evaluating model [{i + 1}/{num_models}]: {model_path}')
         val_results = eval_model(
             model=model,
             eval_data_loader=val_data_loader,
@@ -172,7 +172,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             args.output_dir,
             'greedy_soup_results.json',
         )
-        # sort models by decreasing test accuracy
+        # sort models by decreasing val accuracy
         candidates = sorted(
             candidates, key=lambda item: item.eval_results['accuracy'], reverse=True
         )
@@ -191,7 +191,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         best_val_acc_so_far = candidates[0].eval_results['accuracy']
 
         for i in range(1, num_models):
-            logger.info(f'Trying model {candidates[i].model_path}')
+            logger.info(f'Trying model [{i + 1}/{num_models}] {candidates[i].model_path}')
 
             # get the potential new soup by adding the current model
             new_ingredient_params = torch.load(
