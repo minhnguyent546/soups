@@ -56,6 +56,13 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to use greedy soups for model averaging',
     )
     parser.add_argument(
+        '--greedy_soup_comparison_metric',
+        type=str,
+        choices=['accuracy', 'precision', 'recall', 'f1', 'loss'],
+        help='Metric to use as the comparison metric for greedy soup. `f1` is recommended as it usually has better generalization, reducing bias between validation and test sets.',
+        default='f1',
+    )
+    parser.add_argument(
         '--dataset_dir',
         type=str,
         help='Path to the dataset (SHOULD be the SAME dataset used during training)',

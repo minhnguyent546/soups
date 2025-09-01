@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as Fun
 import torchvision
 import torchvision.transforms.v2 as v2
+import wandb
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
@@ -14,7 +15,6 @@ from torch.utils.data import DataLoader, WeightedRandomSampler, default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
-import wandb
 from soups.opts import add_training_opts
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter

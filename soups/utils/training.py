@@ -58,6 +58,12 @@ def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn
             and isinstance(model.head.fc, nn.Linear)
         ):
             model_classifier = model.head.fc
+        elif (
+            hasattr(model, 'head')
+            and hasattr(model.head, 'fc')
+            and isinstance(model.head.fc, timm.models.metaformer.MlpHead)
+        ):
+            model_classifier = model.head.fc.fc2
         else:
             raise ValueError(f'Unable to determine classification head for model {model_name}')
     else:
