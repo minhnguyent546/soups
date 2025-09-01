@@ -3,6 +3,7 @@ import os
 from collections import Counter
 from datetime import datetime
 
+import numpy as np
 import torch
 import torch.nn.functional as Fun
 import torchvision
@@ -14,6 +15,7 @@ from torch.utils.data import DataLoader, WeightedRandomSampler, default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
+import soups.utils.balanced_mixup as balanced_mixup_utils
 import wandb
 from soups.opts import add_training_opts
 from soups.utils.logger import init_logger, logger
@@ -85,6 +87,10 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # class weighting for train_dataset
+    if args.class_weighting and args.use_balanced_mixup:
+        raise ValueError(
+            'Cannot use both `--class_weighting` and `--use_balanced_mixup` at the same time'
+        )
     train_sampler = None
     if args.class_weighting:
         logger.info('Computing class weights for train_dataset')
@@ -95,29 +101,56 @@ def train_model(args: argparse.Namespace) -> None:
         train_sampler = WeightedRandomSampler(
             weights=train_samples_weights, num_samples=len(train_samples_weights), replacement=True
         )
+    elif args.use_balanced_mixup:
+        train_sampler = balanced_mixup_utils.get_data_loader_sampler(
+            labels=train_dataset.targets, mode='class'
+        )
 
     # CutMiX & MixUp
     if args.use_mixup_cutmix:
         logger.info('MixUp & CutMix enabled')
         cutmix = v2.CutMix(alpha=args.cutmix_alpha, num_classes=num_classes)
         mixup = v2.MixUp(alpha=args.mixup_alpha, num_classes=num_classes)
-        cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
+        cutmix_or_mixup_func = v2.RandomChoice([cutmix, mixup])
     else:
-        cutmix_or_mixup = v2.Identity()
+        cutmix_or_mixup_func = v2.Identity()
 
     def collate_fn(batch):
-        return cutmix_or_mixup(*default_collate((batch)))
+        return cutmix_or_mixup_func(*default_collate((batch)))
 
     # creating data loaders
-    train_data_loader = DataLoader(
-        train_dataset,
-        batch_size=args.train_batch_size,
-        shuffle=(train_sampler is None),
-        num_workers=args.num_workers,
-        pin_memory=True,
-        collate_fn=collate_fn,
-        persistent_workers=True,
-    )
+    balanced_train_data_loader = None
+    if args.use_balanced_mixup:
+        train_data_loader = DataLoader(
+            train_dataset,
+            batch_size=args.train_batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            collate_fn=collate_fn,
+            persistent_workers=True,
+        )
+        balanced_train_data_loader = DataLoader(
+            train_dataset,
+            batch_size=args.train_batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            sampler=train_sampler,
+            collate_fn=collate_fn,
+            persistent_workers=True,
+        )
+    else:
+        train_data_loader = DataLoader(
+            train_dataset,
+            batch_size=args.train_batch_size,
+            shuffle=(train_sampler is None),
+            num_workers=args.num_workers,
+            pin_memory=True,
+            sampler=train_sampler,
+            collate_fn=collate_fn,
+            persistent_workers=True,
+        )
     test_data_loader = DataLoader(
         test_dataset,
         batch_size=args.eval_batch_size,
@@ -262,6 +295,9 @@ def train_model(args: argparse.Namespace) -> None:
         model.train()
 
         train_data_iter = iter(train_data_loader)
+        balanced_train_data_iter = (
+            iter(balanced_train_data_loader) if balanced_train_data_loader is not None else None
+        )
         total_num_samples = len(train_data_loader)
         last_iter_num_batches = total_num_samples % args.gradient_accum_steps
         if last_iter_num_batches == 0:
@@ -288,6 +324,31 @@ def train_model(args: argparse.Namespace) -> None:
                 num_batches=num_batches,
                 labels_index=1,
             )
+            if balanced_train_data_loader is not None:
+                balanced_batches, balanced_num_items_in_batch = utils.get_batch_samples(
+                    data_iter=balanced_train_data_iter,
+                    num_batches=num_batches,
+                    labels_index=1,
+                )
+                assert balanced_num_items_in_batch == num_items_in_batch
+                mixed_batches = []
+                for (inputs, labels), (balanced_inputs, balanced_labels) in zip(
+                    batches, balanced_batches, strict=True
+                ):
+                    lamb = np.random.beta(a=args.mixup_alpha, b=1)
+                    # mixed_inputs = lamb * inputs + (1 - lamb) * balanced_inputs
+                    # mixed_labels = lamb * Fun.one_hot(labels, num_classes) + (
+                    #     1 - lamb
+                    # ) * Fun.one_hot(balanced_labels, num_classes)
+                    mixed_inputs = (1 - lamb) * inputs + lamb * balanced_inputs
+                    mixed_labels = (1 - lamb) * Fun.one_hot(
+                        labels, num_classes
+                    ) + lamb * Fun.one_hot(balanced_labels, num_classes)
+                    mixed_batches.append((mixed_inputs, mixed_labels))
+
+                batches = mixed_batches
+                del balanced_batches
+
             assert num_items_in_batch is not None
             num_batches = len(batches)  # actual number batches retrieved
 

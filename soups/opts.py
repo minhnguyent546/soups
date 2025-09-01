@@ -351,10 +351,16 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         action='store_true',
         help='Whether to use class weighting for the training dataset via `WeightedRandomSampler`',
     )
-    group.add_argument(
+    mixup_mutually_exclusive_group = group.add_mutually_exclusive_group()
+    mixup_mutually_exclusive_group.add_argument(
         '--use_mixup_cutmix',
         action='store_true',
         help='Whether to use MixUp & CutMiX',
+    )
+    mixup_mutually_exclusive_group.add_argument(
+        '--use_balanced_mixup',
+        action='store_true',
+        help='Whether to use Balanced MixUp',
     )
     group.add_argument(
         '--mixup_alpha',
