@@ -3,7 +3,9 @@
 import argparse
 import json
 import os
+from copy import deepcopy
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 import torchvision
@@ -19,6 +21,9 @@ from soups.utils.training import EvalResults, eval_model, make_model, print_eval
 class Candidate:
     model_path: str
     val_results: EvalResults
+
+
+EPS = 1e-7
 
 
 def test_with_model_soups(args: argparse.Namespace) -> None:
@@ -108,6 +113,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         candidates.append(Candidate(model_path, val_results))
         print_eval_results(val_results, prefix='val')
 
+    assert len(candidates) == len(model_paths)
     # uniform soup (i.e. mixing all models together)
     if args.uniform_soup:
         logger.info('** Start cooking uniform soup **')
@@ -136,10 +142,6 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 }
 
         # test the uniform soup
-        model = make_model(
-            model_name=args.model,
-            num_classes=num_classes,
-        ).to(device)
         model.load_state_dict(uniform_soup_params)
         test_results = eval_model(
             model=model,
@@ -178,43 +180,44 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             'greedy_soup_results.json',
         )
 
+        current_candidates = deepcopy(candidates)
         # for loss, we want to minimize it
         if comp_metric == 'loss':
-            for candidate in candidates:
+            for candidate in current_candidates:
                 candidate.val_results['loss'] = -candidate.val_results['loss']
 
         # sort models by decreasing `comp_metric`
-        candidates = sorted(
-            candidates, key=lambda item: item.val_results[comp_metric], reverse=True
+        current_candidates = sorted(
+            current_candidates, key=lambda item: item.val_results[comp_metric], reverse=True
         )
 
         result_data = {}
         result_data['models'] = {}
-        for candidate in candidates:
+        for candidate in current_candidates:
             result_data['models'][candidate.model_path] = candidate.val_results
 
         # start the soup by using the first ingredient.
-        greedy_soup_ingredients = [candidates[0].model_path]
+        greedy_soup_ingredients = [current_candidates[0].model_path]
         greedy_soup_params = torch.load(
-            candidates[0].model_path,
+            current_candidates[0].model_path,
             map_location=device,
         )['model_state_dict']
-        best_val_result_so_far = candidates[0].val_results[comp_metric]
+        best_val_result_so_far = current_candidates[0].val_results[comp_metric]
 
         for i in range(1, num_models):
-            logger.info(f'Trying model [{i + 1}/{num_models}] {candidates[i].model_path}')
+            logger.info(f'Trying model [{i + 1}/{num_models}] {current_candidates[i].model_path}')
 
             # get the potential new soup by adding the current model
             new_ingredient_params = torch.load(
-                candidates[i].model_path,
+                current_candidates[i].model_path,
                 map_location=device,
             )['model_state_dict']
             num_ingredients = len(greedy_soup_ingredients)
-            potential_greedy_soup_params = {
-                k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1.0))
-                + new_ingredient_params[k].clone() * (1.0 / (num_ingredients + 1))
-                for k in new_ingredient_params
-            }
+            potential_greedy_soup_params = add_ingredient_to_soup(
+                soup=greedy_soup_params,
+                num_ingredients=num_ingredients,
+                ingredient=new_ingredient_params,
+            )
 
             # test the new-branch model
             model.load_state_dict(potential_greedy_soup_params)
@@ -232,11 +235,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 f'Potential greedy soup val {comp_metric} {abs(cur_val_result):0.6f}, '
                 f'best so far {abs(best_val_result_so_far):0.6f}.'
             )
-            if cur_val_result > best_val_result_so_far:
-                greedy_soup_ingredients.append(candidates[i].model_path)
+            if cur_val_result + EPS > best_val_result_so_far:
+                greedy_soup_ingredients.append(current_candidates[i].model_path)
                 best_val_result_so_far = cur_val_result
                 greedy_soup_params = potential_greedy_soup_params
-                logger.info(f'Added model {candidates[i].model_path} to greedy soup')
+                logger.info(f'Added model {current_candidates[i].model_path} to greedy soup')
 
         result_data['ingredients'] = greedy_soup_ingredients
         result_data[f'best_val_{comp_metric}'] = abs(best_val_result_so_far)
@@ -271,6 +274,184 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             },
             greedy_soup_model_path,
         )
+
+    if args.pruned_soup:
+        comp_metric = args.greedy_soup_comparison_metric
+        assert comp_metric in ['accuracy', 'precision', 'recall', 'f1', 'loss'], (
+            f'Invalid comparison metric: {comp_metric}'
+        )
+        logger.info('** Start cooking pruned soup **')
+        logger.info(f'Comparison metric: {comp_metric}')
+
+        pruned_soup_result_file = os.path.join(
+            args.output_dir,
+            'pruned_soup_results.json',
+        )
+
+        current_candidates = deepcopy(candidates)
+
+        # for loss, we want to minimize it
+        if comp_metric == 'loss':
+            for candidate in current_candidates:
+                candidate.val_results['loss'] = -candidate.val_results['loss']
+
+        # sort models by decreasing `comp_metric`
+        current_candidates = sorted(
+            current_candidates, key=lambda item: item.val_results[comp_metric], reverse=True
+        )
+
+        # compute starting soup (uniform soup)
+        result_data = {}
+        result_data['models'] = {}
+        for candidate in current_candidates:
+            result_data['models'][candidate.model_path] = candidate.val_results
+
+        pruned_soup_params = {}
+        candidate_model_paths = [candidate.model_path for candidate in current_candidates]
+        for i, model_path in enumerate(candidate_model_paths):
+            logger.info(f'[{i + 1}/{num_models}] Adding model {model_path} to the starting soup')
+            model_state_dict = torch.load(model_path, map_location=device)['model_state_dict']
+            if i == 0:
+                pruned_soup_params = {
+                    k: v.clone() * (1.0 / num_models) for k, v in model_state_dict.items()
+                }
+            else:
+                pruned_soup_params = {
+                    k: v.clone() * (1.0 / num_models) + pruned_soup_params[k]
+                    for k, v in model_state_dict.items()
+                }
+
+        # Compute the baseline performance using validation set
+        pruned_soup_ingredients = [candidate.model_path for candidate in current_candidates]
+        model.load_state_dict(pruned_soup_params)
+        best_val_result_so_far = eval_model(
+            model=model,
+            eval_data_loader=val_data_loader,
+            device=device,
+            num_classes=num_classes,
+        )[comp_metric]
+
+        for iteration in range(args.pruned_soup_num_iters):
+            if len(pruned_soup_ingredients) < 2:
+                logger.info('Not enough ingredients to prune')
+                break
+
+            any_improvement = False
+
+            # Try removing each candidate from worst to best
+            candidates_to_try = list(reversed(current_candidates))  # Start from worst performers
+
+            for candidate_to_remove in candidates_to_try:
+                # Skip if this candidate is not in the current soup
+                if candidate_to_remove.model_path not in pruned_soup_ingredients:
+                    continue
+
+                logger.info(
+                    f'[Iter {iteration + 1}/{args.pruned_soup_num_iters}] Trying removing {candidate_to_remove.model_path}'
+                )
+
+                # get the potential new soup by removing this worst model
+                worst_ingredient_params = torch.load(
+                    candidate_to_remove.model_path,
+                    map_location=device,
+                )['model_state_dict']
+                num_ingredients = len(pruned_soup_ingredients)
+                assert num_ingredients >= 2
+
+                potential_new_pruned_soup_params = remove_ingredient_from_soup(
+                    soup=pruned_soup_params,
+                    num_ingredients=num_ingredients,
+                    ingredient=worst_ingredient_params,
+                )
+
+                # test the new-branch model
+                model.load_state_dict(potential_new_pruned_soup_params)
+                cur_val_result = eval_model(
+                    model=model,
+                    eval_data_loader=val_data_loader,
+                    device=device,
+                    num_classes=num_classes,
+                )[comp_metric]
+                if comp_metric == 'loss':
+                    cur_val_result = -cur_val_result
+
+                # if `comp_metric` improves, remove the model from the soup
+                logger.info(
+                    f'[Iter {iteration + 1}/{args.pruned_soup_num_iters}] Potential new pruned soup val {comp_metric} {abs(cur_val_result):0.6f}, '
+                    f'best so far {abs(best_val_result_so_far):0.6f}.'
+                )
+                if cur_val_result + EPS > best_val_result_so_far:
+                    pruned_soup_ingredients.remove(candidate_to_remove.model_path)
+                    current_candidates.remove(candidate_to_remove)
+                    best_val_result_so_far = cur_val_result
+                    pruned_soup_params = potential_new_pruned_soup_params
+                    logger.info(
+                        f'[Iter {iteration + 1}/{args.pruned_soup_num_iters}] Removed model {candidate_to_remove.model_path} from pruned soup'
+                    )
+                    any_improvement = True
+                    break  # Only remove one model per iteration
+
+            if not any_improvement:
+                logger.info(f'No improvement found in iteration {iteration + 1}')
+                break
+
+        result_data['ingredients'] = pruned_soup_ingredients
+        result_data[f'best_val_{comp_metric}'] = abs(best_val_result_so_far)
+
+        # test the final pruned soup
+        print('** Pruned soup ingredients: **')
+        for ingredient in pruned_soup_ingredients:
+            print(f'  - {ingredient}')
+
+        model.load_state_dict(pruned_soup_params)
+        test_results = eval_model(
+            model=model,
+            eval_data_loader=test_data_loader,
+            device=device,
+            num_classes=num_classes,
+        )
+        print('** Pruned soup test results: **')
+        print_eval_results(eval_results=test_results, prefix='test')
+
+        # save the results
+        result_data['pruned_soup'] = test_results
+        with open(pruned_soup_result_file, 'w') as f:
+            json.dump(result_data, f, indent=4)
+        logger.info(f'Pruned soup results saved to {pruned_soup_result_file}')
+
+        # save the soup model
+        pruned_soup_model_path = os.path.join(args.output_dir, 'pruned_soup.pth')
+        torch.save(
+            {
+                'model_state_dict': pruned_soup_params,
+                'test_results': test_results,
+            },
+            pruned_soup_model_path,
+        )
+
+
+def add_ingredient_to_soup(
+    soup: dict[str, Any], num_ingredients: int, ingredient: dict[str, Any]
+) -> dict[str, Any]:
+    if num_ingredients <= 0:
+        return ingredient
+    new_soup = {
+        k: (soup[k].clone() * num_ingredients + ingredient[k].clone()) / (num_ingredients + 1)
+        for k in ingredient
+    }
+    return new_soup
+
+
+def remove_ingredient_from_soup(
+    soup: dict[str, Any], num_ingredients: int, ingredient: dict[str, Any]
+) -> dict[str, Any]:
+    if num_ingredients <= 1:
+        raise ValueError('Cannot remove ingredient from soup with less than 2 ingredients.')
+    new_soup = {
+        k: (soup[k].clone() * num_ingredients - ingredient[k].clone()) / (num_ingredients - 1)
+        for k in ingredient
+    }
+    return new_soup
 
 
 def main():
