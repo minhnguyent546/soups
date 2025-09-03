@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 import torchvision
@@ -19,6 +20,9 @@ from soups.utils.training import EvalResults, eval_model, make_model, print_eval
 class Candidate:
     model_path: str
     val_results: EvalResults
+
+
+EPS = 1e-7
 
 
 def test_with_model_soups(args: argparse.Namespace) -> None:
@@ -108,6 +112,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         candidates.append(Candidate(model_path, val_results))
         print_eval_results(val_results, prefix='val')
 
+    assert len(candidates) == len(model_paths)
     # uniform soup (i.e. mixing all models together)
     if args.uniform_soup:
         logger.info('** Start cooking uniform soup **')
@@ -136,10 +141,6 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 }
 
         # test the uniform soup
-        model = make_model(
-            model_name=args.model,
-            num_classes=num_classes,
-        ).to(device)
         model.load_state_dict(uniform_soup_params)
         test_results = eval_model(
             model=model,
@@ -210,11 +211,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 map_location=device,
             )['model_state_dict']
             num_ingredients = len(greedy_soup_ingredients)
-            potential_greedy_soup_params = {
-                k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1.0))
-                + new_ingredient_params[k].clone() * (1.0 / (num_ingredients + 1))
-                for k in new_ingredient_params
-            }
+            potential_greedy_soup_params = add_ingredient_to_soup(
+                soup=greedy_soup_params,
+                num_ingredients=num_ingredients,
+                ingredient=new_ingredient_params,
+            )
 
             # test the new-branch model
             model.load_state_dict(potential_greedy_soup_params)
@@ -232,7 +233,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 f'Potential greedy soup val {comp_metric} {abs(cur_val_result):0.6f}, '
                 f'best so far {abs(best_val_result_so_far):0.6f}.'
             )
-            if cur_val_result > best_val_result_so_far:
+            if cur_val_result + EPS > best_val_result_so_far:
                 greedy_soup_ingredients.append(candidates[i].model_path)
                 best_val_result_so_far = cur_val_result
                 greedy_soup_params = potential_greedy_soup_params
@@ -271,6 +272,30 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             },
             greedy_soup_model_path,
         )
+
+
+def add_ingredient_to_soup(
+    soup: dict[str, Any], num_ingredients: int, ingredient: dict[str, Any]
+) -> dict[str, Any]:
+    if num_ingredients < 1:
+        return ingredient
+    new_soup = {
+        k: (soup[k].clone() * num_ingredients + ingredient[k].clone()) / (num_ingredients + 1)
+        for k in ingredient
+    }
+    return new_soup
+
+
+def remove_ingredient_from_soup(
+    soup: dict[str, Any], num_ingredients: int, ingredient: dict[str, Any]
+) -> dict[str, Any]:
+    if num_ingredients < 2:
+        raise ValueError('Cannot remove ingredient from soup with less than 2 ingredients.')
+    new_soup = {
+        k: (soup[k].clone() * num_ingredients - ingredient[k].clone()) / (num_ingredients - 1)
+        for k in ingredient
+    }
+    return new_soup
 
 
 def main():
