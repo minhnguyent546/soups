@@ -4,7 +4,22 @@
 
 ---
 
-[TOC]
+Table of Contents
+=================
+
+- [Leveraging Model Soups to Classify Intangible Cultural Heritage Images from the Mekong Delta](#leveraging-model-soups-to-classify-intangible-cultural-heritage-images-from-the-mekong-delta)
+- [Table of Contents](#table-of-contents)
+  - [1. Installation](#1-installation)
+    - [Prerequisites](#prerequisites)
+    - [Setup](#setup)
+  - [2. Datasets](#2-datasets)
+    - [Dataset structure](#dataset-structure)
+  - [3. Training](#3-training)
+  - [4. Inference](#4-inference)
+  - [5. Acknowledgment](#5-acknowledgment)
+  - [6. Citing](#6-citing)
+
+<!-- Created by https://github.com/ekalinin/github-markdown-toc -->
 
 ## 1. Installation
 
