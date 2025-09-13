@@ -261,6 +261,8 @@ def train_model(args: argparse.Namespace) -> None:
     early_stopping = EarlyStopping(
         patience=args.early_stopping_patience, min_delta=0.0, enabled=args.early_stopping
     )
+    if early_stopping.is_enabled():
+        logger.info(f'Early stopping enabled with patience {early_stopping.patience}')
 
     for epoch in range(args.num_epochs):
         model.train()

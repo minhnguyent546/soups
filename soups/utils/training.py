@@ -52,6 +52,9 @@ class EarlyStopping:
                 return True
         return False
 
+    def is_enabled(self) -> bool:
+        return self.enabled
+
 
 def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn.Module:
     model_name = model_name.lower()
