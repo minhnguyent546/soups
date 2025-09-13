@@ -337,6 +337,18 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to use warmup for Model EMA',
     )
 
+    # early stopping
+    group.add_argument(
+        '--early_stopping',
+        action='store_true',
+        help='Whether to use early stopping',
+    )
+    group.add_argument(
+        '--early_stopping_patience',
+        type=int,
+        help='Patience for early stopping',
+        default=5,
+    )
     # save best checkpoints
     group.add_argument(
         '--best_checkpoint_metrics',
