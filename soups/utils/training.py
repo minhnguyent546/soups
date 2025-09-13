@@ -121,8 +121,8 @@ def get_scheduler(
     if scheduler_name == 'cosine_annealing':
         scheduler = lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer=optimizer,
-            T_0=args.scheduler_T_0,
-            T_mult=args.scheduler_T_mult,
+            T_0=args.cosine_annealing_T_0,
+            T_mult=args.cosine_annealing_T_mult,
             eta_min=args.min_lr,
             **kwargs,
         )
@@ -137,7 +137,7 @@ def get_scheduler(
         scheduler = lr_scheduler.OneCycleLR(
             optimizer=optimizer,
             max_lr=args.lr,
-            pct_start=0.2,
+            pct_start=args.one_cycle_lr_pct_start,
             **kwargs,
         )
     else:
