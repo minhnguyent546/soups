@@ -48,18 +48,29 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--uniform_soup',
         action='store_true',
-        help='Whether to use uniform soups for model averaging',
+        help='Whether to compute uniform soup',
     )
     parser.add_argument(
         '--greedy_soup',
         action='store_true',
-        help='Whether to use greedy soups for model averaging',
+        help='Whether to compute greedy soup',
+    )
+    parser.add_argument(
+        '--pruned_soup',
+        action='store_true',
+        help='Whether to compute pruned soup',
+    )
+    parser.add_argument(
+        '--pruned_soup_num_iters',
+        type=int,
+        help='Number of iterations for pruned soup',
+        default=1,
     )
     parser.add_argument(
         '--greedy_soup_comparison_metric',
         type=str,
         choices=['accuracy', 'precision', 'recall', 'f1', 'loss'],
-        help='Metric to use as the comparison metric for greedy soup. `f1` is recommended as it usually has better generalization, reducing bias between validation and test sets.',
+        help='Metric to use as the comparison metric for greedy soup and pruned soup. `f1` is recommended as it usually has better generalization, reducing bias between validation and test sets.',
         default='f1',
     )
     parser.add_argument(
