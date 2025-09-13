@@ -312,6 +312,13 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
 
     # scheduler
     group.add_argument(
+        '--scheduler',
+        type=str,
+        choices=['cosine_annealing', 'one_cycle_lr'],
+        help='Scheduler type. Supported types are: cosine_annealing_warm_restarts, one_cycle_lr',
+        default='cosine_annealing_warm_restarts',
+    )
+    group.add_argument(
         '--min_lr',
         type=float,
         help='Learning rate',

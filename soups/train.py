@@ -10,7 +10,6 @@ import torchvision.transforms.v2 as v2
 import wandb
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader, WeightedRandomSampler, default_collate
 from tqdm.autonotebook import tqdm
 
@@ -21,6 +20,7 @@ from soups.utils.metric import AverageMeter
 from soups.utils.training import (
     EarlyStopping,
     eval_model,
+    get_scheduler,
     make_model,
     maybe_log_eval_results,
     print_eval_results,
@@ -199,11 +199,18 @@ def train_model(args: argparse.Namespace) -> None:
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
-    scheduler = CosineAnnealingWarmRestarts(
+    scheduler_extra_kwargs = {}
+    if args.scheduler == 'one_cycle_lr':
+        scheduler_extra_kwargs = {
+            'epochs': args.num_epochs,
+            'steps_per_epoch': (len(train_data_loader) + args.gradient_accum_steps - 1)
+            // args.gradient_accum_steps,  # ceil_div
+        }
+    scheduler = get_scheduler(
         optimizer=optimizer,
-        T_0=args.scheduler_T_0,
-        T_mult=args.scheduler_T_mult,
-        eta_min=args.min_lr,
+        scheduler_name=args.scheduler,
+        args=args,
+        **scheduler_extra_kwargs,
     )
 
     if args.run_test_only:
