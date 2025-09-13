@@ -19,6 +19,7 @@ from soups.opts import add_training_opts
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
 from soups.utils.training import (
+    EarlyStopping,
     eval_model,
     make_model,
     maybe_log_eval_results,
@@ -257,6 +258,11 @@ def train_model(args: argparse.Namespace) -> None:
     best_val_results: dict[str, list[tuple[float, str]]] = {
         metric: [] for metric in args.best_checkpoint_metrics
     }
+    early_stopping = EarlyStopping(
+        patience=args.early_stopping_patience, min_delta=0.0, enabled=args.early_stopping
+    )
+    if early_stopping.is_enabled():
+        logger.info(f'Early stopping enabled with patience {early_stopping.patience}')
 
     for epoch in range(args.num_epochs):
         model.train()
@@ -394,6 +400,13 @@ def train_model(args: argparse.Namespace) -> None:
                 checkpoint_dir, f'model_epoch_{epoch}_{{metric}}_{{metric_value:.4f}}.pth'
             ),
         )
+
+        if early_stopping.early_stop(val_loss=val_results['loss']):
+            logger.info(
+                f'Early stopped. No improvement in validation loss for '
+                f'{early_stopping.patience} consecutive epochs.'
+            )
+            break
 
 
 def main():

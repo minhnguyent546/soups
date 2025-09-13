@@ -30,6 +30,39 @@ class EvalResults(TypedDict):
     per_class_f1: list[float]
 
 
+class EarlyStopping:
+    def __init__(
+        self, patience: int = 5, min_delta: float = 0.0, enabled: bool = True, verbose: bool = True
+    ) -> None:
+        self.patience = patience
+        self.min_delta = min_delta
+        self.enabled = enabled
+        self.counter = 0
+        self.min_val_loss = float('inf')
+        self.verbose = verbose
+
+    def early_stop(self, val_loss: float) -> bool:
+        if not self.enabled:
+            # do nothing
+            return False
+
+        if val_loss < self.min_val_loss:
+            self.min_val_loss = val_loss
+            self.counter = 0
+        elif val_loss > (self.min_val_loss + self.min_delta):
+            self.counter += 1
+            if self.verbose:
+                logger.info(
+                    f'No improvement in validation loss for {self.counter} consecutive epochs'
+                )
+            if self.counter >= self.patience:
+                return True
+        return False
+
+    def is_enabled(self) -> bool:
+        return self.enabled
+
+
 def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn.Module:
     model_name = model_name.lower()
     if model_name == 'resnet50':
