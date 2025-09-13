@@ -341,7 +341,10 @@ def train_model(args: argparse.Namespace) -> None:
                 log_data['train/loss'] = batch_loss
                 wandb_run.log(log_data, step=global_step)
 
-            scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
+            if args.scheduler == 'cosine_annealing':
+                scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
+            else:
+                scheduler.step()
 
             training_loss.update(batch_loss, num_items_in_batch)
             train_progressbar.set_postfix({'loss': f'{batch_loss:0.4f}'})
