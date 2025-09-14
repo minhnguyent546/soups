@@ -56,15 +56,16 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     seen_epochs: set[int] = set()
     filtered_model_paths: list[str] = []
     for model_path in model_paths:
-        if not model_path.startswith('model_epoch_'):
+        model_path_basename = os.path.basename(model_path)
+        if not model_path_basename.startswith('model_epoch_'):
             logger.error(
                 'Expected model checkpoints to be named as '
                 'model_epoch_{epoch}_{metric}_{metric_value:.4f}.pth. '
-                f'Found {model_path}'
+                f'Found {model_path_basename}'
             )
             exit(1)
         try:
-            epoch_number = int(model_path[len('model_epoch_') :].split('_')[0])
+            epoch_number = int(model_path_basename[len('model_epoch_') :].split('_')[0])
             if epoch_number in seen_epochs:
                 logger.warning(
                     f'Duplicate checkpoint for epoch {epoch_number}, ignoring {model_path}'
