@@ -33,7 +33,8 @@ dev = [
 line-length = 99
 target-version = "py312"
 exclude = [
-    "./thirdparty/"
+    "./thirdparty/",
+    "./notebooks/",
 ]
 
 [tool.ruff.lint]
@@ -56,6 +57,9 @@ ignore = [
     "F402", # import-shadowed-by-loop-var
     "F823", # undefined-local
 ]
+
+[tool.ruff.lint.isort]
+known-third-party = ["wandb"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = [

@@ -18,7 +18,7 @@ from tqdm.autonotebook import tqdm
 import soups.utils as utils
 from soups.opts import add_self_influence_opts
 from soups.utils.logger import init_logger, logger
-from soups.utils.training import get_final_fc_layer, make_model
+from soups.utils.training import infer_final_fc, make_model
 
 
 def self_influence(args: argparse.Namespace) -> None:
@@ -110,7 +110,7 @@ def self_influence(args: argparse.Namespace) -> None:
     ).to(device)
     model.eval()
 
-    final_fc_layer = get_final_fc_layer(model_name=args.model, model=model)
+    final_fc_layer = infer_final_fc(model=model)
     assert isinstance(final_fc_layer, nn.Linear)
     logger.debug(f'final_fc_layer: {final_fc_layer = }')
 

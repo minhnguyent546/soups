@@ -71,6 +71,28 @@ def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn
     return model
 
 
+def infer_final_fc(model: nn.Module) -> nn.Module:
+    if isinstance(model, torchvision.models.ResNet):
+        final_fc = model.fc
+    elif isinstance(model, torchvision.models.DenseNet):
+        final_fc = model.classifier
+    else:
+        # timm models
+        if hasattr(model, 'head') and isinstance(model.head, nn.Linear):
+            final_fc = model.head
+        elif (
+            hasattr(model, 'head')
+            and hasattr(model.head, 'fc')
+            and isinstance(model.head, nn.Module)
+            and isinstance(model.head.fc, nn.Linear)
+        ):
+            final_fc = model.head.fc
+        else:
+            raise ValueError('Unsupported model type for inferring final fc layer')
+
+    return final_fc
+
+
 def eval_model(
     model: nn.Module,
     eval_data_loader: DataLoader,  # pyright: ignore[reportMissingTypeArgument]
