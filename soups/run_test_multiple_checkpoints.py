@@ -14,7 +14,7 @@ from soups.utils.logger import init_logger, logger
 from soups.utils.training import eval_model, make_model
 
 
-def test_with_model_soups(args: argparse.Namespace) -> None:
+def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     if not args.output_file.endswith('.json'):
         logger.error('Output file must be a .json file')
         exit(1)
@@ -32,12 +32,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files
-    checkpoint_paths: list[str] = []
-    for checkpoint_path in os.listdir(args.checkpoints_dir):
-        checkpoint_path = os.path.join(args.checkpoints_dir, checkpoint_path)
-        if os.path.isfile(checkpoint_path) and checkpoint_path.endswith('.pth'):
-            checkpoint_paths.append(checkpoint_path)
-
+    checkpoint_paths = utils.find_checkpoint_files(checkpoint_files_or_dirs=args.checkpoint_path)
     if not checkpoint_paths:
         logger.error('No model checkpoints found.')
         exit(1)
@@ -153,7 +148,7 @@ def main():
     add_test_multiple_checkpoints_opts(parser)
     args = parser.parse_args()
 
-    test_with_model_soups(args)
+    test_multiple_checkpoints(args)
 
 
 if __name__ == '__main__':

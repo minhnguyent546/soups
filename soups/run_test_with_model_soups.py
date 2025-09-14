@@ -14,7 +14,12 @@ from torch.utils.data import DataLoader
 import soups.utils as utils
 from soups.opts import add_test_with_model_soups_opts
 from soups.utils.logger import init_logger, logger
-from soups.utils.training import EvalResults, eval_model, make_model, print_eval_results
+from soups.utils.training import (
+    EvalResults,
+    eval_model,
+    make_model,
+    print_eval_results,
+)
 
 
 @dataclass
@@ -42,20 +47,39 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files
-    model_paths: list[str] = []
-    for model_path in args.checkpoint_path:
-        if os.path.isfile(model_path) and model_path.endswith('.pth'):
-            model_paths.append(model_path)
-        elif os.path.isdir(model_path):
-            model_paths.extend(
-                os.path.join(model_path, f) for f in os.listdir(model_path) if f.endswith('.pth')
-            )
-    model_paths = list(set(model_paths))  # remove duplicates
+    model_paths = utils.find_checkpoint_files(checkpoint_files_or_dirs=args.checkpoint_path)
     if not model_paths:
         logger.error('No model checkpoints found.')
         exit(1)
+
+    # remove duplicate checkpoints from a single epoch
+    seen_epochs: set[int] = set()
+    filtered_model_paths: list[str] = []
+    for model_path in model_paths:
+        model_path_basename = os.path.basename(model_path)
+        if not model_path_basename.startswith('model_epoch_'):
+            logger.error(
+                'Expected model checkpoints to be named as '
+                'model_epoch_{epoch}_{metric}_{metric_value:.4f}.pth. '
+                f'Found {model_path_basename}'
+            )
+            exit(1)
+        try:
+            epoch_number = int(model_path_basename[len('model_epoch_') :].split('_')[0])
+            if epoch_number in seen_epochs:
+                logger.warning(
+                    f'Duplicate checkpoint for epoch {epoch_number}, ignoring {model_path}'
+                )
+            else:
+                seen_epochs.add(epoch_number)
+                filtered_model_paths.append(model_path)
+        except Exception:
+            logger.error(f'Failed to extract epoch number from checkpoint: {model_path}')
+            exit(1)
+    model_paths = filtered_model_paths
+
     num_models = len(model_paths)
-    logger.info(f'Found total {len(model_paths)} model checkpoints')
+    logger.info(f'Found total {len(model_paths)} unique checkpoints for cooking')
 
     # test dataset and test data loader
     eval_transforms = torchvision.transforms.Compose([

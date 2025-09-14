@@ -101,9 +101,14 @@ def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
         default=42,
     )
     parser.add_argument(
-        '--checkpoints_dir',
+        '--checkpoint_path',
         type=str,
-        help='Directory containing model checkpoints to evaluate',
+        nargs='+',
+        help=(
+            'Can be either a checkpoint file (.pth file) or a directory. '
+            'In case of a directory, all of the checkpoints in that directory '
+            'will be evaluated.'
+        ),
         required=True,
     )
     parser.add_argument(
