@@ -51,8 +51,34 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     if not model_paths:
         logger.error('No model checkpoints found.')
         exit(1)
+
+    # remove duplicate checkpoints from a single epoch
+    seen_epochs: set[int] = set()
+    filtered_model_paths: list[str] = []
+    for model_path in model_paths:
+        if not model_path.startswith('model_epoch_'):
+            logger.error(
+                'Expected model checkpoints to be named as '
+                'model_epoch_{epoch}_{metric}_{metric_value:.4f}.pth. '
+                f'Found {model_path}'
+            )
+            exit(1)
+        try:
+            epoch_number = int(model_path[len('model_epoch_') :].split('_')[0])
+            if epoch_number in seen_epochs:
+                logger.warning(
+                    f'Duplicate checkpoint for epoch {epoch_number}, ignoring {model_path}'
+                )
+            else:
+                seen_epochs.add(epoch_number)
+                filtered_model_paths.append(model_path)
+        except Exception:
+            logger.error(f'Failed to extract epoch number from checkpoint: {model_path}')
+            exit(1)
+    model_paths = filtered_model_paths
+
     num_models = len(model_paths)
-    logger.info(f'Found total {len(model_paths)} model checkpoints')
+    logger.info(f'Found total {len(model_paths)} unique checkpoints for cooking')
 
     # test dataset and test data loader
     eval_transforms = torchvision.transforms.Compose([
