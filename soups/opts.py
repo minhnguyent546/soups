@@ -64,7 +64,7 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         '--pruned_soup_num_iters',
         type=int,
         help='Number of iterations for pruned soup',
-        default=1,
+        default=8,
     )
     parser.add_argument(
         '--greedy_soup_comparison_metric',

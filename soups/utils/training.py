@@ -131,7 +131,7 @@ def get_scheduler(
         for required_arg in required_args:
             if required_arg not in kwargs:
                 raise ValueError(
-                    f'Argument {required_arg} is required for OneCycleLR scheduler but missing in `kwargs`'
+                    f'Argument `{required_arg}` is required for OneCycleLR scheduler but missing in `kwargs`'
                 )
 
         scheduler = lr_scheduler.OneCycleLR(
