@@ -77,11 +77,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     test_data = {}
     best_results = None
     best_results_checkpoint_path = None
-    for checkpoint_path in checkpoint_paths:
+    for i, checkpoint_path in enumerate(checkpoint_paths):
         checkpoint_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint_dict['model_state_dict'])
 
-        logger.info(f'Testing checkpoint: {checkpoint_path}')
+        logger.info(f'Testing checkpoint [{i} / {len(checkpoint_paths)}]: {checkpoint_path}')
         test_results = eval_model(
             model=model,
             eval_data_loader=test_data_loader,

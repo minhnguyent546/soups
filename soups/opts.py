@@ -64,7 +64,7 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         '--pruned_soup_num_iters',
         type=int,
         help='Number of iterations for pruned soup',
-        default=1,
+        default=8,
     )
     parser.add_argument(
         '--greedy_soup_comparison_metric',
@@ -312,21 +312,34 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
 
     # scheduler
     group.add_argument(
+        '--scheduler',
+        type=str,
+        choices=['cosine_annealing', 'one_cycle_lr'],
+        help='Which learning rate scheduler to use',
+        default='cosine_annealing',
+    )
+    group.add_argument(
         '--min_lr',
         type=float,
         help='Learning rate',
         default=0.0,
     )
     group.add_argument(
-        '--scheduler_T_0',
+        '--one_cycle_lr_pct_start',
+        type=float,
+        help='one_cycle_lr: The percentage of the cycle (in number of steps) spent increasing the learning rate',
+        default=0.3,
+    )
+    group.add_argument(
+        '--cosine_annealing_T_0',
         type=int,
-        help='Number of iterations for the first restart in CosineAnnealingWarmRestarts',
+        help='cosine_annealing: Number of iterations for the first restart',
         default=10,
     )
     group.add_argument(
-        '--scheduler_T_mult',
+        '--cosine_annealing_T_mult',
         type=int,
-        help='Multiplier for the period of the cosine annealing scheduler',
+        help='cosine_annealing: Multiplier for the period of the cosine annealing scheduler',
         default=3,
     )
 
