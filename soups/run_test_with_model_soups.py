@@ -14,7 +14,12 @@ from torch.utils.data import DataLoader
 import soups.utils as utils
 from soups.opts import add_test_with_model_soups_opts
 from soups.utils.logger import init_logger, logger
-from soups.utils.training import EvalResults, eval_model, make_model, print_eval_results
+from soups.utils.training import (
+    EvalResults,
+    eval_model,
+    make_model,
+    print_eval_results,
+)
 
 
 @dataclass
@@ -42,15 +47,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files
-    model_paths: list[str] = []
-    for model_path in args.checkpoint_path:
-        if os.path.isfile(model_path) and model_path.endswith('.pth'):
-            model_paths.append(model_path)
-        elif os.path.isdir(model_path):
-            model_paths.extend(
-                os.path.join(model_path, f) for f in os.listdir(model_path) if f.endswith('.pth')
-            )
-    model_paths = list(set(model_paths))  # remove duplicates
+    model_paths = utils.find_checkpoint_files(checkpoint_files_or_dirs=args.checkpoint_path)
     if not model_paths:
         logger.error('No model checkpoints found.')
         exit(1)
