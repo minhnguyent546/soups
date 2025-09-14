@@ -94,4 +94,26 @@ def get_batch_samples(
         num_items_in_batch = sum(
             batch_sample[labels_id].shape[0] for batch_sample in batch_samples
         )
-    return batch_samples, num_items_in_batch
+    return batch_samples, num_items_in_batch  # pyright: ignore[reportReturnType]
+
+
+def is_checkpoint_file(f: str) -> bool:
+    return os.path.isfile(f) and f.endswith('.pth')
+
+
+def find_checkpoint_files(checkpoint_files_or_dirs: list[str]) -> list[str]:
+    """Get all checkpoints files from the given list of files or directories."""
+    checkpoint_paths: list[str] = []
+
+    for checkpoint_path in checkpoint_files_or_dirs:
+        if is_checkpoint_file(checkpoint_path):
+            checkpoint_paths.append(checkpoint_path)
+        elif os.path.isdir(checkpoint_path):
+            checkpoint_paths.extend(
+                os.path.join(checkpoint_path, f)
+                for f in os.listdir(checkpoint_path)
+                if is_checkpoint_file(os.path.join(checkpoint_path, f))
+            )
+    # remove duplicates
+    checkpoint_paths = list(set(checkpoint_paths))
+    return checkpoint_paths

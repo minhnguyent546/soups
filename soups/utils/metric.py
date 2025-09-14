@@ -43,17 +43,13 @@ class AverageMeter(object):
         self.val = 0
         self.sum = 0
         self.count = 0
-
-    @property
-    def avg(self):
-        if self.count == 0:
-            return 0
-        return self.sum / self.count
+        self.avg = 0
 
     def update(self, val, n=1):
         self.val = val
         self.sum += val * n
         self.count += n
+        self.avg = 0 if self.count == 0 else self.sum / self.count
 
     def all_reduce(self):
         if torch.cuda.is_available():
@@ -85,3 +81,23 @@ class AverageMeter(object):
             raise ValueError('invalid summary type %r' % self.summary_type)
 
         return fmtstr.format(**self.__dict__)
+
+
+def main():
+    average_meter = AverageMeter('Test Meter', fmt=':.2f', summary_type=Summary.AVERAGE)
+    for i in range(10):
+        average_meter.update(i, n=1)
+        print(average_meter)
+
+    print('Summary:', average_meter.summary())
+
+    sum_meter = AverageMeter('Test Meter', fmt=':.2f', summary_type=Summary.SUM)
+    for i in range(10):
+        sum_meter.update(i, n=1)
+        print(sum_meter)
+
+    print('Summary:', sum_meter.summary())
+
+
+if __name__ == '__main__':
+    main()

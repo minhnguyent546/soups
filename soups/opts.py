@@ -48,12 +48,30 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--uniform_soup',
         action='store_true',
-        help='Whether to use uniform soups for model averaging',
+        help='Whether to compute uniform soup',
     )
     parser.add_argument(
         '--greedy_soup',
         action='store_true',
-        help='Whether to use greedy soups for model averaging',
+        help='Whether to compute greedy soup',
+    )
+    parser.add_argument(
+        '--pruned_soup',
+        action='store_true',
+        help='Whether to compute pruned soup',
+    )
+    parser.add_argument(
+        '--pruned_soup_num_iters',
+        type=int,
+        help='Number of iterations for pruned soup',
+        default=8,
+    )
+    parser.add_argument(
+        '--greedy_soup_comparison_metric',
+        type=str,
+        choices=['accuracy', 'precision', 'recall', 'f1', 'loss'],
+        help='Metric to use as the comparison metric for greedy soup and pruned soup. `f1` is recommended as it usually has better generalization, reducing bias between validation and test sets.',
+        default='f1',
     )
     parser.add_argument(
         '--dataset_dir',
@@ -83,9 +101,14 @@ def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
         default=42,
     )
     parser.add_argument(
-        '--checkpoints_dir',
+        '--checkpoint_path',
         type=str,
-        help='Directory containing model checkpoints to evaluate',
+        nargs='+',
+        help=(
+            'Can be either a checkpoint file (.pth file) or a directory. '
+            'In case of a directory, all of the checkpoints in that directory '
+            'will be evaluated.'
+        ),
         required=True,
     )
     parser.add_argument(
@@ -350,21 +373,34 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
 
     # scheduler
     group.add_argument(
+        '--scheduler',
+        type=str,
+        choices=['cosine_annealing', 'one_cycle_lr'],
+        help='Which learning rate scheduler to use',
+        default='cosine_annealing',
+    )
+    group.add_argument(
         '--min_lr',
         type=float,
         help='Learning rate',
         default=0.0,
     )
     group.add_argument(
-        '--scheduler_T_0',
+        '--one_cycle_lr_pct_start',
+        type=float,
+        help='one_cycle_lr: The percentage of the cycle (in number of steps) spent increasing the learning rate',
+        default=0.3,
+    )
+    group.add_argument(
+        '--cosine_annealing_T_0',
         type=int,
-        help='Number of iterations for the first restart in CosineAnnealingWarmRestarts',
+        help='cosine_annealing: Number of iterations for the first restart',
         default=10,
     )
     group.add_argument(
-        '--scheduler_T_mult',
+        '--cosine_annealing_T_mult',
         type=int,
-        help='Multiplier for the period of the cosine annealing scheduler',
+        help='cosine_annealing: Multiplier for the period of the cosine annealing scheduler',
         default=3,
     )
 
@@ -386,6 +422,18 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to use warmup for Model EMA',
     )
 
+    # early stopping
+    group.add_argument(
+        '--early_stopping',
+        action='store_true',
+        help='Whether to use early stopping',
+    )
+    group.add_argument(
+        '--early_stopping_patience',
+        type=int,
+        help='Patience for early stopping',
+        default=5,
+    )
     # save best checkpoints
     group.add_argument(
         '--best_checkpoint_metrics',
@@ -403,9 +451,26 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
 
     # other
     group.add_argument(
+        '--class_weighting',
+        action='store_true',
+        help='Whether to use class weighting for the training dataset via `WeightedRandomSampler`',
+    )
+    group.add_argument(
         '--use_mixup_cutmix',
         action='store_true',
         help='Whether to use MixUp & CutMiX',
+    )
+    group.add_argument(
+        '--mixup_alpha',
+        type=float,
+        help='MixUp alpha (recommended values are 0.1 to 0.4)',
+        default=0.2,
+    )
+    group.add_argument(
+        '--cutmix_alpha',
+        type=float,
+        help='CutMiX alpha',
+        default=1.0,
     )
     group.add_argument(
         '--max_grad_norm',

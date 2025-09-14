@@ -14,7 +14,7 @@ from soups.utils.logger import init_logger, logger
 from soups.utils.training import eval_model, make_model
 
 
-def test_with_model_soups(args: argparse.Namespace) -> None:
+def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     if not args.output_file.endswith('.json'):
         logger.error('Output file must be a .json file')
         exit(1)
@@ -32,12 +32,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files
-    checkpoint_paths: list[str] = []
-    for checkpoint_path in os.listdir(args.checkpoints_dir):
-        checkpoint_path = os.path.join(args.checkpoints_dir, checkpoint_path)
-        if os.path.isfile(checkpoint_path) and checkpoint_path.endswith('.pth'):
-            checkpoint_paths.append(checkpoint_path)
-
+    checkpoint_paths = utils.find_checkpoint_files(checkpoint_files_or_dirs=args.checkpoint_path)
     if not checkpoint_paths:
         logger.error('No model checkpoints found.')
         exit(1)
@@ -76,11 +71,12 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
     test_data = {}
     best_results = None
-    for checkpoint_path in checkpoint_paths:
+    best_results_checkpoint_path = None
+    for i, checkpoint_path in enumerate(checkpoint_paths):
         checkpoint_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint_dict['model_state_dict'])
 
-        logger.info(f'Testing checkpoint: {checkpoint_path}')
+        logger.info(f'Testing checkpoint [{i} / {len(checkpoint_paths)}]: {checkpoint_path}')
         test_results = eval_model(
             model=model,
             eval_data_loader=test_data_loader,
@@ -109,20 +105,35 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         # choose the best checkpoint based on (f1, accuracy) score
         if best_results is None:
             best_results = test_results
+            best_results_checkpoint_path = checkpoint_path
         elif round(best_results['f1'], 4) < round(test_results['f1'], 4) or (
             round(best_results['f1'], 4) == round(test_results['f1'], 4)
             and round(best_results['accuracy'], 4) < round(test_results['accuracy'], 4)
         ):
             best_results = test_results
+            best_results_checkpoint_path = checkpoint_path
 
     if best_results is not None:
+        assert best_results_checkpoint_path is not None
         test_data['best_results'] = {
+            'checkpoint_path': best_results_checkpoint_path,
             'loss': f'{best_results["loss"]:0.4f}',
             'accuracy': f'{best_results["accuracy"]:0.4f}',
             'precision': f'{best_results["precision"]:0.4f}',
             'recall': f'{best_results["recall"]:0.4f}',
             'f1': f'{best_results["f1"]:0.4f}',
         }
+        for per_class_metric in (
+            'per_class_accuracy',
+            'per_class_precision',
+            'per_class_recall',
+            'per_class_f1',
+        ):
+            test_data['best_results'][per_class_metric] = {}  # pyright: ignore[reportArgumentType]
+            for i, class_name in enumerate(class_names):
+                test_data['best_results'][per_class_metric][class_name] = (  # pyright: ignore[reportIndexIssue]
+                    f'{best_results[per_class_metric][i]:0.4f}'
+                )
     with open(args.output_file, 'w') as f:
         json.dump(test_data, f, indent=4)
 
@@ -137,7 +148,7 @@ def main():
     add_test_multiple_checkpoints_opts(parser)
     args = parser.parse_args()
 
-    test_with_model_soups(args)
+    test_multiple_checkpoints(args)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import argparse
 import os
+from collections import Counter
 from datetime import datetime
 
 import torch
@@ -9,8 +10,7 @@ import torchvision.transforms.v2 as v2
 import wandb
 from timm.utils.model_ema import ModelEmaV3
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
-from torch.utils.data import DataLoader, default_collate
+from torch.utils.data import DataLoader, WeightedRandomSampler, default_collate
 from tqdm.autonotebook import tqdm
 
 import soups.utils as utils
@@ -18,7 +18,9 @@ from soups.opts import add_training_opts
 from soups.utils.logger import init_logger, logger
 from soups.utils.metric import AverageMeter
 from soups.utils.training import (
+    EarlyStopping,
     eval_model,
+    get_scheduler,
     make_model,
     maybe_log_eval_results,
     print_eval_results,
@@ -83,11 +85,23 @@ def train_model(args: argparse.Namespace) -> None:
         f'val_size = {len(val_dataset)}'
     )
 
+    # class weighting for train_dataset
+    train_sampler = None
+    if args.class_weighting:
+        logger.info('Computing class weights for train_dataset')
+        train_counts = Counter([label for _, label in train_dataset])
+        train_weights = {cls: 1.0 / cnt for cls, cnt in train_counts.items()}
+        train_samples_weights = [train_weights[label] for _, label in train_dataset]
+
+        train_sampler = WeightedRandomSampler(
+            weights=train_samples_weights, num_samples=len(train_samples_weights), replacement=True
+        )
+
     # CutMiX & MixUp
     if args.use_mixup_cutmix:
         logger.info('MixUp & CutMix enabled')
-        cutmix = v2.CutMix(alpha=1.0, num_classes=num_classes)
-        mixup = v2.MixUp(alpha=1.0, num_classes=num_classes)
+        cutmix = v2.CutMix(alpha=args.cutmix_alpha, num_classes=num_classes)
+        mixup = v2.MixUp(alpha=args.mixup_alpha, num_classes=num_classes)
         cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
     else:
         cutmix_or_mixup = v2.Identity()
@@ -99,7 +113,7 @@ def train_model(args: argparse.Namespace) -> None:
     train_data_loader = DataLoader(
         train_dataset,
         batch_size=args.train_batch_size,
-        shuffle=True,
+        shuffle=(train_sampler is None),
         num_workers=args.num_workers,
         pin_memory=True,
         collate_fn=collate_fn,
@@ -185,11 +199,18 @@ def train_model(args: argparse.Namespace) -> None:
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
-    scheduler = CosineAnnealingWarmRestarts(
+    scheduler_extra_kwargs = {}
+    if args.scheduler == 'one_cycle_lr':
+        scheduler_extra_kwargs = {
+            'epochs': args.num_epochs,
+            'steps_per_epoch': (len(train_data_loader) + args.gradient_accum_steps - 1)
+            // args.gradient_accum_steps,  # ceil_div
+        }
+    scheduler = get_scheduler(
         optimizer=optimizer,
-        T_0=args.scheduler_T_0,
-        T_mult=args.scheduler_T_mult,
-        eta_min=args.min_lr,
+        scheduler_name=args.scheduler,
+        args=args,
+        **scheduler_extra_kwargs,
     )
 
     if args.run_test_only:
@@ -244,6 +265,11 @@ def train_model(args: argparse.Namespace) -> None:
     best_val_results: dict[str, list[tuple[float, str]]] = {
         metric: [] for metric in args.best_checkpoint_metrics
     }
+    early_stopping = EarlyStopping(
+        patience=args.early_stopping_patience, min_delta=0.0, enabled=args.early_stopping
+    )
+    if early_stopping.is_enabled():
+        logger.info(f'Early stopping enabled with patience {early_stopping.patience}')
 
     for epoch in range(args.num_epochs):
         model.train()
@@ -315,7 +341,10 @@ def train_model(args: argparse.Namespace) -> None:
                 log_data['train/loss'] = batch_loss
                 wandb_run.log(log_data, step=global_step)
 
-            scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
+            if args.scheduler == 'cosine_annealing':
+                scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
+            else:
+                scheduler.step()
 
             training_loss.update(batch_loss, num_items_in_batch)
             train_progressbar.set_postfix({'loss': f'{batch_loss:0.4f}'})
@@ -381,6 +410,13 @@ def train_model(args: argparse.Namespace) -> None:
                 checkpoint_dir, f'model_epoch_{epoch}_{{metric}}_{{metric_value:.4f}}.pth'
             ),
         )
+
+        if early_stopping.early_stop(val_loss=val_results['loss']):
+            logger.info(
+                f'Early stopped. No improvement in validation loss for '
+                f'{early_stopping.patience} consecutive epochs.'
+            )
+            break
 
 
 def main():

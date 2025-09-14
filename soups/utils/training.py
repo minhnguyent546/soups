@@ -1,3 +1,4 @@
+import argparse
 import heapq
 import os
 from contextlib import nullcontext
@@ -7,6 +8,7 @@ import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as Fun
+import torch.optim.lr_scheduler as lr_scheduler
 import torchvision
 from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from torch import Tensor
@@ -28,6 +30,39 @@ class EvalResults(TypedDict):
     per_class_precision: list[float]
     per_class_recall: list[float]
     per_class_f1: list[float]
+
+
+class EarlyStopping:
+    def __init__(
+        self, patience: int = 5, min_delta: float = 0.0, enabled: bool = True, verbose: bool = True
+    ) -> None:
+        self.patience = patience
+        self.min_delta = min_delta
+        self.enabled = enabled
+        self.counter = 0
+        self.min_val_loss = float('inf')
+        self.verbose = verbose
+
+    def early_stop(self, val_loss: float) -> bool:
+        if not self.enabled:
+            # do nothing
+            return False
+
+        if val_loss < self.min_val_loss:
+            self.min_val_loss = val_loss
+            self.counter = 0
+        elif val_loss > (self.min_val_loss + self.min_delta):
+            self.counter += 1
+            if self.verbose:
+                logger.info(
+                    f'No improvement in validation loss for {self.counter} consecutive epochs'
+                )
+            if self.counter >= self.patience:
+                return True
+        return False
+
+    def is_enabled(self) -> bool:
+        return self.enabled
 
 
 def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn.Module:
@@ -104,6 +139,40 @@ def infer_final_fc(model: nn.Module) -> nn.Module:
             raise ValueError('Unsupported model type for inferring final fc layer')
 
     return final_fc
+
+
+def get_scheduler(
+    optimizer: torch.optim.Optimizer,
+    scheduler_name: str,
+    args: argparse.Namespace,
+    **kwargs,
+):
+    if scheduler_name == 'cosine_annealing':
+        scheduler = lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer=optimizer,
+            T_0=args.cosine_annealing_T_0,
+            T_mult=args.cosine_annealing_T_mult,
+            eta_min=args.min_lr,
+            **kwargs,
+        )
+    elif scheduler_name == 'one_cycle_lr':
+        required_args = ['epochs', 'steps_per_epoch']
+        for required_arg in required_args:
+            if required_arg not in kwargs:
+                raise ValueError(
+                    f'Argument `{required_arg}` is required for OneCycleLR scheduler but missing in `kwargs`'
+                )
+
+        scheduler = lr_scheduler.OneCycleLR(
+            optimizer=optimizer,
+            max_lr=args.lr,
+            pct_start=args.one_cycle_lr_pct_start,
+            **kwargs,
+        )
+    else:
+        raise ValueError(f'Unsupported scheduler: {scheduler_name}')
+
+    return scheduler
 
 
 def eval_model(
