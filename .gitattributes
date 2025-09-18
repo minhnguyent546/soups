@@ -1,3 +1,7 @@
 * text=auto eol=lf
 *.ipynb linguist-generated
 pyrightconfig.json linguist-language=jsonc
+
+*.ipynb	diff=jupyternotebook
+
+*.ipynb	merge=jupyternotebook
