@@ -46,6 +46,11 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         default='timm/coatnet_0_rw_224.sw_in1k',
     )
     parser.add_argument(
+        '--remove_duplicate_checkpoints',
+        action='store_true',
+        help='Whether to remove duplicate checkpoints (checkpoints saved for the same epoch but with different metrics)',
+    )
+    parser.add_argument(
         '--uniform_soup',
         action='store_true',
         help='Whether to compute uniform soup',
