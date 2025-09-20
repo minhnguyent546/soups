@@ -33,11 +33,11 @@ class EvalResults(TypedDict):
 
 
 def convert_eval_results_to_dict(
-    eval_results: EvalResults, fmt: str = '0.4f', class_names: list[str] | None = None
+    eval_results: EvalResults, fmt: str = '0.4f', class_names: list[str] | list[int] | None = None
 ) -> dict[str, Any]:
     if class_names is None:
         num_classes = len(eval_results['per_class_accuracy'])
-        class_names = [str(i) for i in range(num_classes)]
+        class_names = list(range(num_classes))
 
     eval_results_dict: dict[str, Any] = {
         'loss': f'{eval_results["loss"]:{fmt}}',
