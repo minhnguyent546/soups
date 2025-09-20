@@ -32,6 +32,35 @@ class EvalResults(TypedDict):
     per_class_f1: list[float]
 
 
+def convert_eval_results_to_dict(
+    eval_results: EvalResults, fmt: str = '0.4f', class_names: list[str] | list[int] | None = None
+) -> dict[str, Any]:
+    if class_names is None:
+        num_classes = len(eval_results['per_class_accuracy'])
+        class_names = list(range(num_classes))
+
+    eval_results_dict: dict[str, Any] = {
+        'loss': f'{eval_results["loss"]:{fmt}}',
+        'accuracy': f'{eval_results["accuracy"]:{fmt}}',
+        'precision': f'{eval_results["precision"]:{fmt}}',
+        'recall': f'{eval_results["recall"]:{fmt}}',
+        'f1': f'{eval_results["f1"]:{fmt}}',
+    }
+    for per_class_metric in (
+        'per_class_accuracy',
+        'per_class_precision',
+        'per_class_recall',
+        'per_class_f1',
+    ):
+        eval_results_dict[per_class_metric] = {}
+        for i, class_name in enumerate(class_names):
+            eval_results_dict[per_class_metric][class_name] = (
+                f'{eval_results[per_class_metric][i]:{fmt}}'
+            )
+
+    return eval_results_dict
+
+
 class EarlyStopping:
     def __init__(
         self, patience: int = 5, min_delta: float = 0.0, enabled: bool = True, verbose: bool = True

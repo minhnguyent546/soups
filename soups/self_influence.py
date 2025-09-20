@@ -39,7 +39,7 @@ def self_influence(args: argparse.Namespace) -> None:
 
     # find all model checkpoint files
     checkpoint_paths: list[str] = []
-    for checkpoint_path in args.checkpoint_path:
+    for checkpoint_path in args.checkpoint_paths:
         if os.path.isfile(checkpoint_path) and checkpoint_path.endswith('.pth'):
             checkpoint_paths.append(checkpoint_path)
         elif os.path.isdir(checkpoint_path):

@@ -29,7 +29,7 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         default=42,
     )
     parser.add_argument(
-        '--checkpoint_path',
+        '--checkpoint_paths',
         type=str,
         nargs='+',
         help=(
@@ -101,7 +101,7 @@ def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
         default=42,
     )
     parser.add_argument(
-        '--checkpoint_path',
+        '--checkpoint_paths',
         type=str,
         nargs='+',
         help=(
