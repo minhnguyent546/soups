@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import soups.utils as utils
 from soups.opts import add_test_multiple_checkpoints_opts
 from soups.utils.logger import init_logger, logger
-from soups.utils.training import convert_eval_results_to_dict, eval_model, make_model
+from soups.utils.training import EvalResults, convert_eval_results_to_dict, eval_model, make_model
 
 
 def test_multiple_checkpoints(args: argparse.Namespace) -> None:
@@ -48,6 +48,10 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
             std=[0.229, 0.224, 0.225],
         ),
     ])
+    val_dataset = torchvision.datasets.ImageFolder(
+        root=os.path.join(args.dataset_dir, 'val'),
+        transform=eval_transforms,
+    )
     test_dataset = torchvision.datasets.ImageFolder(
         root=os.path.join(args.dataset_dir, 'test'),
         transform=eval_transforms,
@@ -55,6 +59,14 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     class_names = test_dataset.classes
     num_classes = len(class_names)
 
+    val_data_loader = DataLoader(
+        val_dataset,
+        batch_size=args.eval_batch_size,
+        shuffle=False,
+        num_workers=max(1, min(16, (os.cpu_count() or 1) // 2)),
+        pin_memory=True,
+        persistent_workers=True,
+    )
     test_data_loader = DataLoader(
         test_dataset,
         batch_size=args.eval_batch_size,
@@ -70,56 +82,68 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     ).to(device)
 
     test_data = {}
-    best_results = None
-    best_results_checkpoint_path = None
+    best_test_results: EvalResults | None = (
+        None  # test results for checkpoint with best (f1, accuracy)
+    )
+    best_test_results_checkpoint_path = None
+    best_val_f1: float = float('-inf')  # best val f1 score
+    best_val_f1_checkpoint_path = None  # checkpoint with best val f1
+
     for i, checkpoint_path in enumerate(checkpoint_paths):
         checkpoint_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint_dict['model_state_dict'])
 
         logger.info(f'Testing checkpoint [{i} / {len(checkpoint_paths)}]: {checkpoint_path}')
+        val_results = eval_model(
+            model=model,
+            eval_data_loader=val_data_loader,
+            device=device,
+            num_classes=num_classes,
+        )
         test_results = eval_model(
             model=model,
             eval_data_loader=test_data_loader,
             device=device,
             num_classes=num_classes,
         )
-        test_data[checkpoint_path] = convert_eval_results_to_dict(
+        test_data[checkpoint_path] = {}
+        test_data[checkpoint_path]['val'] = convert_eval_results_to_dict(
+            eval_results=val_results,
+            class_names=class_names,
+        )
+        test_data[checkpoint_path]['test'] = convert_eval_results_to_dict(
             eval_results=test_results,
             class_names=class_names,
         )
 
-        # choose the best checkpoint based on (f1, accuracy) score
-        if best_results is None:
-            best_results = test_results
-            best_results_checkpoint_path = checkpoint_path
-        elif round(best_results['f1'], 4) < round(test_results['f1'], 4) or (
-            round(best_results['f1'], 4) == round(test_results['f1'], 4)
-            and round(best_results['accuracy'], 4) < round(test_results['accuracy'], 4)
-        ):
-            best_results = test_results
-            best_results_checkpoint_path = checkpoint_path
+        # choose the best checkpoint based on val f1
+        if val_results['f1'] > best_val_f1:
+            best_val_f1 = val_results['f1']
+            best_val_f1_checkpoint_path = checkpoint_path
 
-    if best_results is not None:
-        assert best_results_checkpoint_path is not None
-        test_data['best_results'] = {
-            'checkpoint_path': best_results_checkpoint_path,
-            'loss': f'{best_results["loss"]:0.4f}',
-            'accuracy': f'{best_results["accuracy"]:0.4f}',
-            'precision': f'{best_results["precision"]:0.4f}',
-            'recall': f'{best_results["recall"]:0.4f}',
-            'f1': f'{best_results["f1"]:0.4f}',
-        }
-        for per_class_metric in (
-            'per_class_accuracy',
-            'per_class_precision',
-            'per_class_recall',
-            'per_class_f1',
+        # choose the best checkpoint based on (f1, accuracy) score
+        if best_test_results is None:
+            best_test_results = test_results
+            best_test_results_checkpoint_path = checkpoint_path
+        elif round(best_test_results['f1'], 6) < round(test_results['f1'], 6) or (
+            round(best_test_results['f1'], 6) == round(test_results['f1'], 6)
+            and round(best_test_results['accuracy'], 6) < round(test_results['accuracy'], 6)
         ):
-            test_data['best_results'][per_class_metric] = {}  # pyright: ignore[reportArgumentType]
-            for i, class_name in enumerate(class_names):
-                test_data['best_results'][per_class_metric][class_name] = (  # pyright: ignore[reportIndexIssue]
-                    f'{best_results[per_class_metric][i]:0.4f}'
-                )
+            best_test_results = test_results
+            best_test_results_checkpoint_path = checkpoint_path
+
+    assert best_test_results is not None
+    assert best_test_results_checkpoint_path is not None
+    assert best_val_f1_checkpoint_path is not None
+
+    test_data['best_val_f1_checkpoint_test_results'] = test_data[best_val_f1_checkpoint_path]
+    test_data[f'best_test_results@{len(checkpoint_paths)}'] = convert_eval_results_to_dict(
+        eval_results=best_test_results, class_names=class_names
+    )
+    test_data[f'best_test_results@{len(checkpoint_paths)}']['checkpoint_path'] = (
+        best_test_results_checkpoint_path
+    )
+
     with open(args.output_file, 'w') as f:
         json.dump(test_data, f, indent=4)
 
