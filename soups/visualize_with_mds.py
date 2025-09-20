@@ -56,7 +56,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
         model_paths.append(args.uniform_soup_checkpoint)
         uniform_checkpoint_idx = len(model_paths) - 1
 
-    for model_path in args.checkpoint_path:
+    for model_path in args.checkpoint_paths:
         if os.path.isfile(model_path) and model_path.endswith('.pth'):
             model_paths.append(model_path)
         elif os.path.isdir(model_path):

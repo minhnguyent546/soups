@@ -48,7 +48,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files
-    model_paths = utils.find_checkpoint_files(checkpoint_files_or_dirs=args.checkpoint_path)
+    model_paths = utils.find_checkpoint_files(checkpoint_files_or_dirs=args.checkpoint_paths)
     if not model_paths:
         logger.error('No model checkpoints found.')
         exit(1)

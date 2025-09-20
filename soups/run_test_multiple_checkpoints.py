@@ -32,7 +32,7 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files
-    checkpoint_paths = utils.find_checkpoint_files(checkpoint_files_or_dirs=args.checkpoint_path)
+    checkpoint_paths = utils.find_checkpoint_files(checkpoint_files_or_dirs=args.checkpoint_paths)
     if not checkpoint_paths:
         logger.error('No model checkpoints found.')
         exit(1)
