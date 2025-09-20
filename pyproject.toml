@@ -22,6 +22,7 @@ dependencies = [
     "numpy>=2.2.6",
     "captum>=0.7.0",
     "annoy>=1.17.3",
+    "pydantic>=2.11.7",
 ]
 
 [dependency-groups]
