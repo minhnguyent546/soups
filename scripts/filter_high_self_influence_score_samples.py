@@ -86,7 +86,8 @@ def filter_high_self_influence_score_samples(args: argparse.Namespace) -> None:
         shutil.copytree(src_split_dir, dst_split_dir)
 
     self_influence_scores = self_influence_results.self_influence_scores
-    self_influence_scores = self_influence_scores[: args.num_top_samples_to_remove]
+    if args.num_top_samples_to_remove is not None:
+        self_influence_scores = self_influence_scores[: args.num_top_samples_to_remove]
 
     num_removed_samples_per_class: dict[int, int] = dict.fromkeys(range(num_classes), 0)
 
@@ -119,7 +120,12 @@ def filter_high_self_influence_score_samples(args: argparse.Namespace) -> None:
         file_to_remove = os.path.join(
             args.output_dataset_dir, 'train', item.class_name, item.file_name
         )
-        os.remove(file_to_remove)
+        try:
+            os.remove(file_to_remove)
+        except FileNotFoundError:
+            logger.warning(f'File not found, skipping: {file_to_remove}')
+        except PermissionError as e:
+            logger.warning(f'Permission denied when removing {file_to_remove}: {e}')
 
     logger.info(' ** Summary ** ')
     logger.info(f'  Total samples in the original training set: {len(train_dataset)}')
@@ -152,7 +158,7 @@ def _add_opts(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--num_top_samples_to_remove',
         type=int,
-        help='Number of samples (top self-influence scores samples) to consider removing',
+        help='Number of samples (top self-influence scores samples) to consider removing. Leave `None` to consider all samples.',
         default=None,
     )
     parser.add_argument(
