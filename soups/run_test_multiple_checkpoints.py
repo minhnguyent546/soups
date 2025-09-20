@@ -139,9 +139,9 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     test_data['best_val_f1_checkpoint_test_results'] = test_data[best_val_f1_checkpoint_path][
         'test'
     ]
-    test_data['best_val_f1_checkpoint_test_results'] = test_data[best_val_f1_checkpoint_path][
-        'checkpoint_path'
-    ] = best_val_f1_checkpoint_path
+    test_data['best_val_f1_checkpoint_test_results']['checkpoint_path'] = (
+        best_val_f1_checkpoint_path
+    )
 
     test_data[f'best_test_results@{len(checkpoint_paths)}'] = convert_eval_results_to_dict(
         eval_results=best_test_results, class_names=class_names
