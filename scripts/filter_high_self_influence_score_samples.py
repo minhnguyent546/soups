@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Filter samples with high self-influence scores and saved the filtered dataset."""
+"""Filter samples with high self-influence scores and save the filtered dataset."""
 
 import argparse
 import os
@@ -30,19 +30,22 @@ class SelfInfluenceResults(BaseModel):
 
 
 def filter_high_self_influence_score_samples(args: argparse.Namespace) -> None:
+    # logger
+    init_logger(compact=True)
+
+    # validate some files and dirs
     if not os.path.isfile(args.self_influence_results) or not args.self_influence_results.endswith(
         '.json'
     ):
         logger.error(f'Invalid self-influence results file: {args.self_influence_results}')
-        exit(1)
+        sys.exit(1)
     if os.path.isdir(args.output_dataset_dir) and len(os.listdir(args.output_dataset_dir)) > 0:
         logger.error(
             f'Output dataset directory already exists and is not empty: {args.output_dataset_dir}'
         )
-        exit(1)
+        sys.exit(1)
 
-    init_logger(compact=True)
-
+    # loading and validating self-influence results file
     with open(args.self_influence_results, 'r', encoding='utf-8') as f:
         self_influence_results_str = f.read()
 
@@ -53,7 +56,7 @@ def filter_high_self_influence_score_samples(args: argparse.Namespace) -> None:
     except ValueError as err:
         logger.error(f'Invalid self-influence results file format: {args.self_influence_results}')
         logger.error(err)
-        exit(1)
+        sys.exit(1)
 
     # loading dataset
     train_dataset = torchvision.datasets.ImageFolder(
@@ -67,51 +70,57 @@ def filter_high_self_influence_score_samples(args: argparse.Namespace) -> None:
         logger.error(
             f'Number of classes in self-influence results ({self_influence_results.num_classes}) does not match the dataset ({num_classes})'
         )
-        exit(1)
+        sys.exit(1)
     if self_influence_results.num_samples != len(train_dataset):
         logger.error(
             f'Number of samples in self-influence results ({self_influence_results.num_samples}) does not match the dataset ({len(train_dataset)})'
         )
-        exit(1)
+        sys.exit(1)
 
-    # copy test and val splits
+    # copy val, test, and train splits
+    os.makedirs(args.output_dataset_dir, exist_ok=True)
     for split in ['val', 'test', 'train']:
         src_split_dir = os.path.join(args.dataset_dir, split)
         dst_split_dir = os.path.join(args.output_dataset_dir, split)
         if not os.path.isdir(src_split_dir):
             logger.error(f'Split directory does not exist: {src_split_dir}')
-            exit(1)
+            sys.exit(1)
 
         logger.info(f'Copying {split} split from {src_split_dir} to {dst_split_dir}')
         shutil.copytree(src_split_dir, dst_split_dir)
 
     self_influence_scores = self_influence_results.self_influence_scores
-    if args.num_top_samples_to_remove is not None:
+    if args.num_top_samples_to_remove is not None and args.num_top_samples_to_remove >= 1:
         self_influence_scores = self_influence_scores[: args.num_top_samples_to_remove]
 
     num_removed_samples_per_class: dict[int, int] = dict.fromkeys(range(num_classes), 0)
 
     # determine max number of removed samples per class
-    max_num_removed_samples_per_class: list[int]
-    if args.max_num_removed_samples_per_class < 1.0:
-        max_num_removed_samples_per_class = [
-            int(args.max_num_removed_samples_per_class * train_dataset.targets.count(c))
-            for c in range(num_classes)
-        ]
-    else:
-        max_num_removed_samples_per_class = [
-            int(args.max_num_removed_samples_per_class) for _ in range(num_classes)
-        ]
+    max_num_removed_samples_per_class: list[int] | None = None
+    if (
+        args.max_num_removed_samples_per_class is not None
+        and args.max_num_removed_samples_per_class >= 0
+    ):
+        if args.max_num_removed_samples_per_class < 1.0:
+            max_num_removed_samples_per_class = [
+                int(args.max_num_removed_samples_per_class * train_dataset.targets.count(c))
+                for c in range(num_classes)
+            ]
+        else:
+            max_num_removed_samples_per_class = [
+                int(args.max_num_removed_samples_per_class) for _ in range(num_classes)
+            ]
 
-    logger.debug('  Max number of removed samples per class:')
-    for class_label, max_num_removed in enumerate(max_num_removed_samples_per_class):
-        logger.debug(f'   - {label_to_class[class_label]}: {max_num_removed}')
+        logger.debug('  Max number of removed samples per class:')
+        for class_label, max_num_removed in enumerate(max_num_removed_samples_per_class):
+            logger.debug(f'   - {label_to_class[class_label]}: {max_num_removed}')
 
     logger.info('Filtering top self-influence score samples...')
     for item in self_influence_scores:
         item_label = class_to_label[item.class_name]
         if (
-            num_removed_samples_per_class[item_label]
+            max_num_removed_samples_per_class is not None
+            and num_removed_samples_per_class[item_label]
             >= max_num_removed_samples_per_class[item_label]
         ):
             # if we have reached the max number of removed samples for this class, skip it
@@ -171,7 +180,7 @@ def _add_opts(parser: argparse.ArgumentParser) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Filter samples with high self-influence scores and saved the filtered dataset.',
+        description='Filter samples with high self-influence scores and save the filtered dataset.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     _add_opts(parser)
