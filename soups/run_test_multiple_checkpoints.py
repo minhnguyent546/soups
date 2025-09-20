@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import soups.utils as utils
 from soups.opts import add_test_multiple_checkpoints_opts
 from soups.utils.logger import init_logger, logger
-from soups.utils.training import eval_model, make_model
+from soups.utils.training import convert_eval_results_to_dict, eval_model, make_model
 
 
 def test_multiple_checkpoints(args: argparse.Namespace) -> None:
@@ -83,24 +83,10 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        test_data[checkpoint_path] = {
-            'loss': f'{test_results["loss"]:0.4f}',
-            'accuracy': f'{test_results["accuracy"]:0.4f}',
-            'precision': f'{test_results["precision"]:0.4f}',
-            'recall': f'{test_results["recall"]:0.4f}',
-            'f1': f'{test_results["f1"]:0.4f}',
-        }
-        for per_class_metric in (
-            'per_class_accuracy',
-            'per_class_precision',
-            'per_class_recall',
-            'per_class_f1',
-        ):
-            test_data[checkpoint_path][per_class_metric] = {}
-            for i, class_name in enumerate(class_names):
-                test_data[checkpoint_path][per_class_metric][class_name] = (
-                    f'{test_results[per_class_metric][i]:0.4f}'
-                )
+        test_data[checkpoint_path] = convert_eval_results_to_dict(
+            eval_results=test_results,
+            class_names=class_names,
+        )
 
         # choose the best checkpoint based on (f1, accuracy) score
         if best_results is None:

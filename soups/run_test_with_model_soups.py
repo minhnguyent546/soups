@@ -16,6 +16,7 @@ from soups.opts import add_test_with_model_soups_opts
 from soups.utils.logger import init_logger, logger
 from soups.utils.training import (
     EvalResults,
+    convert_eval_results_to_dict,
     eval_model,
     make_model,
     print_eval_results,
@@ -98,8 +99,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         root=os.path.join(args.dataset_dir, 'test'),
         transform=eval_transforms,
     )
-    classes = test_dataset.classes
-    num_classes = len(classes)
+    class_names = test_dataset.classes
+    num_classes = len(class_names)
 
     val_data_loader = DataLoader(
         val_dataset,
@@ -148,8 +149,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
         result_data = {}
         result_data['models'] = {}
+        result_data['num_models'] = len(candidates)
         for candidate in candidates:
-            result_data['models'][candidate.model_path] = candidate.val_results
+            result_data['models'][candidate.model_path] = convert_eval_results_to_dict(
+                eval_results=candidate.val_results, class_names=class_names
+            )
 
         uniform_soup_params = {}
         for i, model_path in enumerate(model_paths):
@@ -177,7 +181,9 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         print_eval_results(eval_results=test_results, prefix='test')
 
         # save the results
-        result_data['uniform_soup'] = test_results
+        result_data['uniform_soup'] = convert_eval_results_to_dict(
+            eval_results=test_results, class_names=class_names
+        )
         with open(uniform_soup_result_file, 'w') as f:
             json.dump(result_data, f, indent=4)
         logger.info(f'Uniform soup results saved to {uniform_soup_result_file}')
@@ -217,8 +223,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
         result_data = {}
         result_data['models'] = {}
+        result_data['num_models'] = len(current_candidates)
         for candidate in current_candidates:
-            result_data['models'][candidate.model_path] = candidate.val_results
+            result_data['models'][candidate.model_path] = convert_eval_results_to_dict(
+                eval_results=candidate.val_results, class_names=class_names
+            )
 
         # start the soup by using the first ingredient.
         greedy_soup_ingredients = [current_candidates[0].model_path]
@@ -266,6 +275,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 logger.info(f'Added model {current_candidates[i].model_path} to greedy soup')
 
         result_data['ingredients'] = greedy_soup_ingredients
+        result_data['num_ingredients'] = len(greedy_soup_ingredients)
         result_data[f'best_val_{comp_metric}'] = abs(best_val_result_so_far)
 
         # test the final greedy soup
@@ -284,7 +294,9 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         print_eval_results(eval_results=test_results, prefix='test')
 
         # save the results
-        result_data['greedy_soup'] = test_results
+        result_data['greedy_soup'] = convert_eval_results_to_dict(
+            eval_results=test_results, class_names=class_names
+        )
         with open(greedy_soup_result_file, 'w') as f:
             json.dump(result_data, f, indent=4)
         logger.info(f'Greedy soup results saved to {greedy_soup_result_file}')
@@ -327,8 +339,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         # compute starting soup (uniform soup)
         result_data = {}
         result_data['models'] = {}
+        result_data['num_models'] = len(current_candidates)
         for candidate in current_candidates:
-            result_data['models'][candidate.model_path] = candidate.val_results
+            result_data['models'][candidate.model_path] = convert_eval_results_to_dict(
+                eval_results=candidate.val_results, class_names=class_names
+            )
 
         pruned_soup_params = {}
         candidate_model_paths = [candidate.model_path for candidate in current_candidates]
@@ -420,6 +435,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
                 break
 
         result_data['ingredients'] = pruned_soup_ingredients
+        result_data['num_ingredients'] = len(pruned_soup_ingredients)
         result_data[f'best_val_{comp_metric}'] = abs(best_val_result_so_far)
 
         # test the final pruned soup
@@ -438,7 +454,9 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         print_eval_results(eval_results=test_results, prefix='test')
 
         # save the results
-        result_data['pruned_soup'] = test_results
+        result_data['pruned_soup'] = convert_eval_results_to_dict(
+            eval_results=test_results, class_names=class_names
+        )
         with open(pruned_soup_result_file, 'w') as f:
             json.dump(result_data, f, indent=4)
         logger.info(f'Pruned soup results saved to {pruned_soup_result_file}')
