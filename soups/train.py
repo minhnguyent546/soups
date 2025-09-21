@@ -311,7 +311,12 @@ def train_model(args: argparse.Namespace) -> None:
 
                 with autocast_context:
                     logits = model(images)
-                    loss = Fun.cross_entropy(input=logits, target=labels, reduction='sum')
+                    loss = Fun.cross_entropy(
+                        input=logits,
+                        target=labels,
+                        reduction='sum',
+                        label_smoothing=args.label_smoothing,
+                    )
                     if num_items_in_batch > 0:
                         loss = loss / num_items_in_batch
 

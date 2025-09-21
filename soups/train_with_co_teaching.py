@@ -335,11 +335,13 @@ def train_model(args: argparse.Namespace) -> None:
                         input=logits_1[selected_indices_2],
                         target=labels[selected_indices_2],
                         reduction='sum',
+                        label_smoothing=args.label_smoothing,
                     )
                     loss_2 = Fun.cross_entropy(
                         input=logits_2[selected_indices_1],
                         target=labels[selected_indices_1],
                         reduction='sum',
+                        label_smoothing=args.label_smoothing,
                     )
                     if num_items_in_batch > 0:
                         loss_1 = loss_1 / num_items_in_batch
