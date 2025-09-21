@@ -9,6 +9,7 @@ import scienceplots  # noqa: F401
 import torch
 import torch.nn.functional as Fun
 import torchvision
+import torchvision.transforms.v2 as v2
 from sklearn.manifold import MDS
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm
@@ -73,10 +74,10 @@ def visualize_predictions(args: argparse.Namespace) -> None:
 
     # test dataset and test data loader
     logger.info(f'Run visualization on {args.eval_split} split')
-    eval_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(224, 224)),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(
+    eval_transforms = v2.Compose([
+        v2.Resize(size=(224, 224)),
+        v2.ToTensor(),
+        v2.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225],
         ),
