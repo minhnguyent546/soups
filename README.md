@@ -2,6 +2,13 @@
 
 **Abstract:** The classification of Intangible Cultural Heritage (ICH) images in the Mekong Delta poses unique challenges due to limited annotated data, high visual similarity among classes, and domain heterogeneity. In such low-resource settings, conventional deep learning models often suffer from high variance or overfit to spurious correlations, leading to poor generalization. To address these limitations, we propose a robust framework that integrates the hybrid CoAtNet architecture with *model soups*, a lightweight weight-space ensembling technique that averages checkpoints from a single training trajectory - *without increasing inference cost*. CoAtNet captures both local and global patterns through stage-wise fusion of convolution and self-attention. We apply two ensembling strategies - *greedy* and *uniform* soup - to selectively combine diverse checkpoints into a final model. Beyond performance improvements, we analyze the ensembling effect through the lens of bias–variance decomposition. Our findings show that *model soups* reduces variance by stabilizing predictions across diverse model snapshots, while introducing minimal additional bias. Furthermore, using cross-entropy-based distance metrics and Multidimensional Scaling (MDS), we show that *model soups* selects geometrically diverse checkpoints, unlike Soft Voting, which blends redundant models centered in output space. Evaluated on the ICH-17 dataset (7,406 images across 17 classes), our approach achieves **state-of-the-art** results with **72.36**\% top-1 accuracy and **69.28**\% macro F1-score, outperforming strong baselines including ResNet-50, DenseNet-121, and ViT and previous studies on the ICH-17 dataset. These results underscore that diversity-aware checkpoint averaging provides a principled and efficient way to reduce variance and enhance generalization in culturally rich, data-scarce classification tasks.
 
+<p align="center">
+  <a href="https://github.com/minhnguyent546/soups/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/minhnguyent546/soups"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue?logo=python">
+  <a href="https://github.com/minhnguyent546/soups/issues"><img alt="Issues" src="https://img.shields.io/github/issues/minhnguyent546/soups"></a>
+  <a href="https://github.com/minhnguyent546/soups/pulls"><img alt="PRs" src="https://img.shields.io/github/issues-pr/minhnguyent546/soups"></a>
+</p>
+
 ---
 
 Table of Contents
