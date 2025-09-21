@@ -4,13 +4,15 @@ on:
   push:
     branches:
       - main
-      - dev/thien
-      - dev/khang
+      - dev
+    paths:
+      - "soups/**"
   pull_request:
     branches:
       - main
-      - dev/thien
-      - dev/khang
+      - dev
+    paths:
+      - "soups/**"
   workflow_dispatch:
 
 jobs:
