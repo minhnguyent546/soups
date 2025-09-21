@@ -56,7 +56,8 @@ def train_model(args: argparse.Namespace) -> None:
         ),
     ])
     eval_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(224, 224)),
+        torchvision.transforms.Resize(size=(256, 256)),
+        torchvision.transforms.CenterCrop(size=(224, 224)),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
