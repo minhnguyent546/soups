@@ -69,7 +69,8 @@ def self_influence(args: argparse.Namespace) -> None:
         ),
     ])
     eval_transforms = v2.Compose([
-        v2.Resize(size=(224, 224)),
+        v2.Resize(size=(256, 256)),
+        v2.CenterCrop(size=(224, 224)),
         v2.ToTensor(),
         v2.Normalize(
             mean=[0.485, 0.456, 0.406],

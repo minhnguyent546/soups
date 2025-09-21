@@ -75,7 +75,8 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     # test dataset and test data loader
     logger.info(f'Run visualization on {args.eval_split} split')
     eval_transforms = v2.Compose([
-        v2.Resize(size=(224, 224)),
+        v2.Resize(size=(256, 256)),
+        v2.CenterCrop(size=(224, 224)),
         v2.ToTensor(),
         v2.Normalize(
             mean=[0.485, 0.456, 0.406],
