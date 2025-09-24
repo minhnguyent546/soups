@@ -88,10 +88,13 @@ def train_model(args: argparse.Namespace) -> None:
     train_sampler = None
     if args.class_weighting:
         logger.info('Computing class weights for train_dataset')
-        _, train_label_counts = np.unique(train_dataset.targets, return_counts=True)
+        train_unique_labels, train_label_counts = np.unique(
+            train_dataset.targets, return_counts=True
+        )
         assert np.all(train_label_counts > 0), 'All classes must have at least one sample'
         train_weights = 1.0 / train_label_counts
-        train_samples_weights = [train_weights[label] for label in train_dataset.targets]
+        label_to_weight = dict(zip(train_unique_labels, train_weights, strict=True))
+        train_samples_weights = [label_to_weight[label] for label in train_dataset.targets]
 
         train_sampler = WeightedRandomSampler(
             weights=train_samples_weights, num_samples=len(train_samples_weights), replacement=True
