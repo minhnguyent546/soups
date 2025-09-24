@@ -117,3 +117,17 @@ def find_checkpoint_files(checkpoint_files_or_dirs: list[str]) -> list[str]:
     # remove duplicates
     checkpoint_paths = list(set(checkpoint_paths))
     return checkpoint_paths
+
+
+def get_device(device_str: str | None = None) -> torch.device:
+    if device_str is None:
+        device_str = 'auto'
+    if device_str == 'auto':
+        device_str = (
+            'cuda'
+            if torch.cuda.is_available()
+            else 'mps'
+            if torch.backends.mps.is_available()
+            else 'cpu'
+        )
+    return torch.device(device_str)

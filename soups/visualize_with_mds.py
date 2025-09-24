@@ -28,13 +28,7 @@ def visualize_predictions(args: argparse.Namespace) -> None:
     utils.set_seed(args.seed)
     logger.info(f'Using seed: {args.seed}')
 
-    device = torch.device(
-        'cuda'
-        if torch.cuda.is_available()
-        else 'mps'
-        if torch.backends.mps.is_available()
-        else 'cpu',
-    )
+    device = utils.get_device(args.device)
     logger.info(f'Using device: {device}')
 
     if os.path.isfile(args.output_file):

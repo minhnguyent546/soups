@@ -29,7 +29,7 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     utils.set_seed(args.seed)
     logger.info(f'Using seed: {args.seed}')
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = utils.get_device(args.device)
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files

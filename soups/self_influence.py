@@ -32,10 +32,7 @@ def self_influence(args: argparse.Namespace) -> None:
         raise FileExistsError(f'Output file already exists: {args.output_file}')
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    device = args.device
-    if device == 'auto':
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+    device = utils.get_device(args.device)
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files

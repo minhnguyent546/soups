@@ -41,7 +41,7 @@ def train_model(args: argparse.Namespace) -> None:
         os.makedirs(checkpoint_dir, exist_ok=True)
 
     # training device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = utils.get_device(args.device)
     logger.info(f'Using device: {device}')
 
     # loading dataset
