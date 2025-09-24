@@ -120,14 +120,19 @@ def find_checkpoint_files(checkpoint_files_or_dirs: list[str]) -> list[str]:
 
 
 def get_device(device_str: str | None = None) -> torch.device:
-    if device_str is None:
-        device_str = 'auto'
-    if device_str == 'auto':
-        device_str = (
-            'cuda'
-            if torch.cuda.is_available()
-            else 'mps'
-            if torch.backends.mps.is_available()
-            else 'cpu'
-        )
-    return torch.device(device_str)
+    if device_str is None or device_str == 'auto':
+        if torch.cuda.is_available():
+            device_str = 'cuda'
+        elif torch.backends.mps.is_built() and torch.backends.mps.is_available():
+            try:
+                _ = torch.ones(1, device='mps')
+                device_str = 'mps'
+            except Exception:
+                device_str = 'cpu'
+        else:
+            device_str = 'cpu'
+
+    try:
+        return torch.device(device_str)
+    except Exception as e:
+        raise ValueError(f'Invalid device specification: {device_str}') from e
