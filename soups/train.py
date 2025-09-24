@@ -362,7 +362,7 @@ def train_model(args: argparse.Namespace) -> None:
                 log_data['train/loss'] = batch_loss
                 wandb_run.log(log_data, step=global_step)
 
-            if epoch > args.warmup_lr_epochs - 1:
+            if epoch > args.lr_warmup_epochs - 1:
                 if args.scheduler == 'cosine_annealing':
                     lr_scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
                 else:
@@ -411,7 +411,7 @@ def train_model(args: argparse.Namespace) -> None:
         )
 
         # scheduler (for warmup)
-        if epoch <= args.warmup_lr_epochs - 1 and warmup_lr_scheduler is not None:
+        if epoch <= args.lr_warmup_epochs - 1 and warmup_lr_scheduler is not None:
             warmup_lr_scheduler.step()
 
         # saving checkpoint
