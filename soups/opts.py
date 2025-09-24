@@ -6,7 +6,7 @@ def add_training_opts(parser: argparse.ArgumentParser) -> None:
     """
     All options used for training the model.
     """
-    _add_general_opts(parser)
+    _add_model_and_dataset_opts(parser, is_training=True)
     _add_training_opts(parser)
     _add_wandb_opts(parser)
 
@@ -15,19 +15,15 @@ def add_training_with_co_teaching_opts(parser: argparse.ArgumentParser) -> None:
     """
     All options used for training the model with Co-Teaching.
     """
-    _add_general_opts(parser)
+    _add_model_and_dataset_opts(parser)
     _add_training_opts(parser)
     _add_co_teaching_opts(parser)
     _add_wandb_opts(parser)
 
 
 def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        '--seed',
-        type=int,
-        help='Seed',
-        default=42,
-    )
+    _add_model_and_dataset_opts(parser)
+
     parser.add_argument(
         '--checkpoint_paths',
         type=str,
@@ -38,12 +34,6 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
             'will be evaluated.'
         ),
         required=True,
-    )
-    parser.add_argument(
-        '--model',
-        type=str,
-        help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
-        default='timm/coatnet_0_rw_224.sw_in1k',
     )
     parser.add_argument(
         '--remove_duplicate_checkpoints',
@@ -79,18 +69,6 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
         default='f1',
     )
     parser.add_argument(
-        '--dataset_dir',
-        type=str,
-        help='Path to the dataset (SHOULD be the SAME dataset used during training)',
-        default='./data/ICH-17',
-    )
-    parser.add_argument(
-        '--eval_batch_size',
-        type=int,
-        help='Batch size for evaluation',
-        default=16,
-    )
-    parser.add_argument(
         '--output_dir',
         type=str,
         help='Directory to save the results',
@@ -99,12 +77,8 @@ def add_test_with_model_soups_opts(parser: argparse.ArgumentParser) -> None:
 
 
 def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        '--seed',
-        type=int,
-        help='Seed',
-        default=42,
-    )
+    _add_model_and_dataset_opts(parser)
+
     parser.add_argument(
         '--checkpoint_paths',
         type=str,
@@ -117,24 +91,6 @@ def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
         required=True,
     )
     parser.add_argument(
-        '--model',
-        type=str,
-        help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
-        default='timm/coatnet_0_rw_224.sw_in1k',
-    )
-    parser.add_argument(
-        '--dataset_dir',
-        type=str,
-        help='Path to the dataset (SHOULD be the SAME dataset used during training)',
-        default='./data/ICH-17',
-    )
-    parser.add_argument(
-        '--eval_batch_size',
-        type=int,
-        help='Batch size for evaluation',
-        default=16,
-    )
-    parser.add_argument(
         '--output_file',
         type=str,
         help='File to save the evaluation results (.json file)',
@@ -143,12 +99,8 @@ def add_test_multiple_checkpoints_opts(parser: argparse.ArgumentParser) -> None:
 
 
 def add_visualize_with_mds_opts(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        '--seed',
-        type=int,
-        help='Seed',
-        default=42,
-    )
+    _add_model_and_dataset_opts(parser)
+
     parser.add_argument(
         '--use_landmark_mds',
         action='store_true',
@@ -178,29 +130,11 @@ def add_visualize_with_mds_opts(parser: argparse.ArgumentParser) -> None:
         required=True,
     )
     parser.add_argument(
-        '--model',
-        type=str,
-        help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
-        default='timm/coatnet_0_rw_224.sw_in1k',
-    )
-    parser.add_argument(
-        '--dataset_dir',
-        type=str,
-        help='Path to the dataset (SHOULD be the SAME dataset used during training)',
-        default='./data/ICH-17',
-    )
-    parser.add_argument(
         '--eval_split',
         type=str,
         choices=['train', 'val', 'test'],
         help='Which split will be used for visualization',
         default='val',
-    )
-    parser.add_argument(
-        '--eval_batch_size',
-        type=int,
-        help='Batch size for evaluation',
-        default=16,
     )
     parser.add_argument(
         '--output_file',
@@ -211,12 +145,8 @@ def add_visualize_with_mds_opts(parser: argparse.ArgumentParser) -> None:
 
 
 def add_self_influence_opts(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        '--seed',
-        type=int,
-        help='Seed for random number generation',
-        default=42,
-    )
+    _add_model_and_dataset_opts(parser)
+
     parser.add_argument(
         '--checkpoint_path',
         type=str,
@@ -235,30 +165,6 @@ def add_self_influence_opts(parser: argparse.ArgumentParser) -> None:
         default='self_influence_scores.json',
     )
     parser.add_argument(
-        '--model',
-        type=str,
-        help='Name of the model to use (e.g., resnet50, densenet121, timm/coatnet_0_rw_224.sw_in1k, timm/maxvit_base_tf_224.in1k)',
-        default='timm/coatnet_0_rw_224.sw_in1k',
-    )
-    parser.add_argument(
-        '--device',
-        type=str,
-        help='Which device to use for inference',
-        default='auto',
-    )
-    parser.add_argument(
-        '--dataset_dir',
-        type=str,
-        help='Path to the dataset (SHOULD be the SAME dataset used during training)',
-        default='./data/ICH-17',
-    )
-    parser.add_argument(
-        '--eval_batch_size',
-        type=int,
-        help='Batch size for evaluation',
-        default=16,
-    )
-    parser.add_argument(
         '--num_workers',
         type=int,
         default=min(os.cpu_count() or 1, 16),  # too large can cause insufficient shared memory
@@ -266,12 +172,14 @@ def add_self_influence_opts(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_general_opts(parser: argparse.ArgumentParser) -> None:
-    group = parser.add_argument_group('General')
+def _add_model_and_dataset_opts(
+    parser: argparse.ArgumentParser, is_training: bool = False
+) -> None:
+    group = parser.add_argument_group('Model & Dataset')
     group.add_argument(
         '--seed',
         type=int,
-        help='Seed',
+        help='Seed for random number generators',
         default=42,
     )
     group.add_argument(
@@ -281,10 +189,47 @@ def _add_general_opts(parser: argparse.ArgumentParser) -> None:
         default='timm/coatnet_0_rw_224.sw_in1k',
     )
     group.add_argument(
+        '--device',
+        type=str,
+        help='Which device to use (e.g., cpu, cuda, cuda:7, auto)',
+        default='auto',
+    )
+    group.add_argument(
         '--dataset_dir',
         type=str,
         help='Path to the dataset',
-        default='./data/ICH-17',
+        default='./data/ich-17',
+    )
+    if is_training:
+        group.add_argument(
+            '--train_batch_size',
+            type=int,
+            help='Training batch size',
+            default=32,
+        )
+        group.add_argument(
+            '--train_crop_size',
+            type=int,
+            help='Random crop size used for training',
+            default=224,
+        )
+    group.add_argument(
+        '--eval_batch_size',
+        type=int,
+        help='Evaluation batch size',
+        default=32,
+    )
+    group.add_argument(
+        '--eval_resize_size',
+        type=int,
+        help='Resize size used for evaluation',
+        default=256,
+    )
+    group.add_argument(
+        '--eval_crop_size',
+        type=int,
+        help='Central crop size used for evaluation',
+        default=224,
     )
 
 
@@ -314,18 +259,6 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         '--random_weights',
         action='store_true',
         help='Whether to initializing models with random weights instead of initializing with pretrained weights (this option takes no effect when `from_checkpoint` is specified)',
-    )
-    group.add_argument(
-        '--train_batch_size',
-        type=int,
-        help='Training batch size',
-        default=32,
-    )
-    group.add_argument(
-        '--eval_batch_size',
-        type=int,
-        help='Evaluation batch size',
-        default=32,
     )
     group.add_argument(
         '--num_epochs',
