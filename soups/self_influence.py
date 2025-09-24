@@ -57,7 +57,7 @@ def self_influence(args: argparse.Namespace) -> None:
 
     # load dataset
     train_transforms = v2.Compose([
-        v2.RandomResizedCrop(size=(224, 224)),
+        v2.RandomResizedCrop(size=args.train_crop_size),
         v2.RandomHorizontalFlip(p=0.5),
         v2.ToTensor(),
         v2.Normalize(
@@ -66,8 +66,8 @@ def self_influence(args: argparse.Namespace) -> None:
         ),
     ])
     eval_transforms = v2.Compose([
-        v2.Resize(size=(256, 256)),
-        v2.CenterCrop(size=(224, 224)),
+        v2.Resize(size=args.eval_resize_size),
+        v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
             mean=[0.485, 0.456, 0.406],
