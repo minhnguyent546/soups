@@ -45,7 +45,7 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     utils.set_seed(args.seed)
     logger.info(f'Using seed: {args.seed}')
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = utils.get_device(args.device)
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files
@@ -87,8 +87,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
 
     # test dataset and test data loader
     eval_transforms = v2.Compose([
-        v2.Resize(size=(256, 256)),
-        v2.CenterCrop(size=(224, 224)),
+        v2.Resize(size=args.eval_resize_size),
+        v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
             mean=[0.485, 0.456, 0.406],

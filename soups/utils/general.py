@@ -117,3 +117,22 @@ def find_checkpoint_files(checkpoint_files_or_dirs: list[str]) -> list[str]:
     # remove duplicates
     checkpoint_paths = list(set(checkpoint_paths))
     return checkpoint_paths
+
+
+def get_device(device_str: str | None = None) -> torch.device:
+    if device_str is None or device_str == 'auto':
+        if torch.cuda.is_available():
+            device_str = 'cuda'
+        elif torch.backends.mps.is_built() and torch.backends.mps.is_available():
+            try:
+                _ = torch.ones(1, device='mps')
+                device_str = 'mps'
+            except Exception:
+                device_str = 'cpu'
+        else:
+            device_str = 'cpu'
+
+    try:
+        return torch.device(device_str)
+    except Exception as e:
+        raise ValueError(f'Invalid device specification: {device_str}') from e

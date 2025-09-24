@@ -32,10 +32,7 @@ def self_influence(args: argparse.Namespace) -> None:
         raise FileExistsError(f'Output file already exists: {args.output_file}')
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    device = args.device
-    if device == 'auto':
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+    device = utils.get_device(args.device)
     logger.info(f'Using device: {device}')
 
     # find all model checkpoint files
@@ -60,7 +57,7 @@ def self_influence(args: argparse.Namespace) -> None:
 
     # load dataset
     train_transforms = v2.Compose([
-        v2.RandomResizedCrop(size=(224, 224)),
+        v2.RandomResizedCrop(size=args.train_crop_size),
         v2.RandomHorizontalFlip(p=0.5),
         v2.ToTensor(),
         v2.Normalize(
@@ -69,8 +66,8 @@ def self_influence(args: argparse.Namespace) -> None:
         ),
     ])
     eval_transforms = v2.Compose([
-        v2.Resize(size=(256, 256)),
-        v2.CenterCrop(size=(224, 224)),
+        v2.Resize(size=args.eval_resize_size),
+        v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
             mean=[0.485, 0.456, 0.406],
