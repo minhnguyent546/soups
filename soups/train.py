@@ -1,8 +1,8 @@
 import argparse
 import os
-from collections import Counter
 from datetime import datetime
 
+import numpy as np
 import torch
 import torch.nn.functional as Fun
 import torchvision
@@ -88,9 +88,9 @@ def train_model(args: argparse.Namespace) -> None:
     train_sampler = None
     if args.class_weighting:
         logger.info('Computing class weights for train_dataset')
-        train_counts = Counter([label for _, label in train_dataset])
-        train_weights = {cls: 1.0 / cnt for cls, cnt in train_counts.items()}
-        train_samples_weights = [train_weights[label] for _, label in train_dataset]
+        _, train_label_counts = np.unique(train_dataset.targets, return_counts=True)
+        train_weights = 1.0 / train_label_counts
+        train_samples_weights = [train_weights[label] for label in train_dataset.targets]
 
         train_sampler = WeightedRandomSampler(
             weights=train_samples_weights, num_samples=len(train_samples_weights), replacement=True
@@ -113,6 +113,7 @@ def train_model(args: argparse.Namespace) -> None:
         train_dataset,
         batch_size=args.train_batch_size,
         shuffle=(train_sampler is None),
+        sampler=train_sampler,
         num_workers=args.num_workers,
         pin_memory=True,
         collate_fn=collate_fn,
