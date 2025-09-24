@@ -195,7 +195,7 @@ def get_scheduler(
         scheduler = lr_scheduler.OneCycleLR(
             optimizer=optimizer,
             max_lr=args.lr,
-            pct_start=args.one_cycle_lr_pct_start,
+            pct_start=0.0,  # warmup is not can be used via a separate scheduler
             **kwargs,
         )
     else:

@@ -390,31 +390,24 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Minimum learning rate',
         default=0.0,
     )
-    parser.add_argument(
+    group.add_argument(
         '--lr_warmup_epochs',
         type=int,
         help='Number of epochs to warmup',
         default=0,
     )
-    parser.add_argument(
+    group.add_argument(
         '--lr_warmup_method',
         type=str,
         choices=['linear', 'constant'],
         help='Learning rate warmup method',
         default='linear',
     )
-    parser.add_argument(
+    group.add_argument(
         '--lr_warmup_decay',
         type=float,
         help='Decay for learning rate',
         default=0.01,
-    )
-
-    group.add_argument(
-        '--one_cycle_lr_pct_start',
-        type=float,
-        help='one_cycle_lr: The percentage of the cycle (in number of steps) spent increasing the learning rate',
-        default=0.3,
     )
     group.add_argument(
         '--cosine_annealing_T_0',

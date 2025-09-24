@@ -240,7 +240,7 @@ def train_model(args: argparse.Namespace) -> None:
     scheduler_extra_kwargs = {}
     if args.scheduler == 'one_cycle_lr':
         scheduler_extra_kwargs = {
-            'epochs': args.num_epochs,
+            'epochs': args.num_epochs - args.lr_warmup_epochs,
             'steps_per_epoch': (len(train_data_loader) + args.gradient_accum_steps - 1)
             // args.gradient_accum_steps,  # ceil_div
         }
@@ -307,7 +307,9 @@ def train_model(args: argparse.Namespace) -> None:
             desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
         )
 
-        is_during_warmup = epoch <= args.lr_warmup_epochs - 1 and warmup_lr_scheduler is not None
+        is_during_warmup = (epoch <= args.lr_warmup_epochs - 1) and (
+            warmup_lr_scheduler is not None
+        )
 
         for update_step in train_progressbar:
             num_batches = (
@@ -354,12 +356,9 @@ def train_model(args: argparse.Namespace) -> None:
             scaler.update()
             optimizer.zero_grad()
 
-            if model_ema is not None:
-                model_ema.update(model)
-
             if wandb_run is not None:
                 log_data = {
-                    f'learning_rate/group_{group_id}': param_group['lr]']
+                    f'learning_rate/group_{group_id}': param_group['lr']
                     for group_id, param_group in enumerate(optimizer.param_groups)
                 }
                 log_data['train/loss'] = batch_loss
