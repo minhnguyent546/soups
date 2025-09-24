@@ -244,7 +244,7 @@ def train_model(args: argparse.Namespace) -> None:
             'steps_per_epoch': (len(train_data_loader) + args.gradient_accum_steps - 1)
             // args.gradient_accum_steps,  # ceil_div
         }
-    lr_scheduler = get_scheduler(
+    main_lr_scheduler = get_scheduler(
         optimizer=optimizer,
         scheduler_name=args.scheduler,
         args=args,
@@ -306,6 +306,9 @@ def train_model(args: argparse.Namespace) -> None:
             range(total_updates),
             desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
         )
+
+        is_during_warmup = epoch <= args.lr_warmup_epochs - 1 and warmup_lr_scheduler is not None
+
         for update_step in train_progressbar:
             num_batches = (
                 args.gradient_accum_steps
@@ -356,17 +359,19 @@ def train_model(args: argparse.Namespace) -> None:
 
             if wandb_run is not None:
                 log_data = {
-                    f'learning_rate/group_{group_id}': group_lr
-                    for group_id, group_lr in enumerate(lr_scheduler.get_last_lr())
+                    f'learning_rate/group_{group_id}': param_group['lr]']
+                    for group_id, param_group in enumerate(optimizer.param_groups)
                 }
                 log_data['train/loss'] = batch_loss
                 wandb_run.log(log_data, step=global_step)
 
-            if epoch > args.lr_warmup_epochs - 1:
+            if not is_during_warmup:
                 if args.scheduler == 'cosine_annealing':
-                    lr_scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
+                    main_lr_scheduler.step(
+                        epoch - args.lr_warmup_epochs + update_step / total_updates
+                    )  # pyright: ignore[reportArgumentType]
                 else:
-                    lr_scheduler.step()
+                    main_lr_scheduler.step()
 
             training_loss.update(batch_loss, num_items_in_batch)
             train_progressbar.set_postfix({'loss': f'{batch_loss:0.4f}'})
@@ -411,7 +416,8 @@ def train_model(args: argparse.Namespace) -> None:
         )
 
         # scheduler (for warmup)
-        if epoch <= args.lr_warmup_epochs - 1 and warmup_lr_scheduler is not None:
+        if is_during_warmup:
+            assert warmup_lr_scheduler is not None
             warmup_lr_scheduler.step()
 
         # saving checkpoint
