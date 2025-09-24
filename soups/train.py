@@ -20,7 +20,6 @@ from soups.utils.metric import AverageMeter
 from soups.utils.training import (
     EarlyStopping,
     eval_model,
-    get_scheduler,
     make_model,
     maybe_log_eval_results,
     print_eval_results,
@@ -237,30 +236,42 @@ def train_model(args: argparse.Namespace) -> None:
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
-    scheduler_extra_kwargs = {}
-    if args.scheduler == 'one_cycle_lr':
-        scheduler_extra_kwargs = {
-            'epochs': args.num_epochs - args.lr_warmup_epochs,
-            'steps_per_epoch': (len(train_data_loader) + args.gradient_accum_steps - 1)
-            // args.gradient_accum_steps,  # ceil_div
-        }
-    main_lr_scheduler = get_scheduler(
-        optimizer=optimizer,
-        scheduler_name=args.scheduler,
-        args=args,
-        **scheduler_extra_kwargs,
-    )
+
+    num_updates_per_epoch = (
+        len(train_data_loader) + args.gradient_accum_steps - 1
+    ) // args.gradient_accum_steps
+    if args.scheduler == 'cosine_annealing':
+        main_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer=optimizer,
+            T_0=args.cosine_annealing_T_0,
+            T_mult=args.cosine_annealing_T_mult,
+            eta_min=args.min_lr,
+        )
+    elif args.scheduler == 'one_cycle_lr':
+        main_lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer=optimizer,
+            max_lr=args.lr,
+            pct_start=0.0,  # warmup is now can be used via a separate scheduler
+            epochs=args.num_epochs - args.lr_warmup_epochs,
+            steps_per_epoch=num_updates_per_epoch,
+        )
+    else:
+        raise ValueError(f'Unsupported scheduler: {args.scheduler}')
 
     # learning rate warmup
     warmup_lr_scheduler = None
     if args.lr_warmup_epochs > 0:
         if args.lr_warmup_method == 'linear':
             warmup_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
-                optimizer, start_factor=args.lr_warmup_decay, total_iters=args.lr_warmup_epochs
+                optimizer,
+                start_factor=args.lr_warmup_decay,
+                total_iters=args.lr_warmup_epochs * num_updates_per_epoch,
             )
         elif args.lr_warmup_method == 'constant':
             warmup_lr_scheduler = torch.optim.lr_scheduler.ConstantLR(
-                optimizer, factor=args.lr_warmup_decay, total_iters=args.lr_warmup_epochs
+                optimizer,
+                factor=args.lr_warmup_decay,
+                total_iters=args.lr_warmup_epochs * num_updates_per_epoch,
             )
         else:
             raise RuntimeError(
@@ -298,23 +309,19 @@ def train_model(args: argparse.Namespace) -> None:
 
         # determine the number of updates for the current epoch
         # based on gradient accumulation steps
-        total_updates = (
+        num_updates_per_epoch = (
             total_num_samples + args.gradient_accum_steps - 1
         ) // args.gradient_accum_steps  # ceil_div
 
         train_progressbar = tqdm(
-            range(total_updates),
+            range(num_updates_per_epoch),
             desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
-        )
-
-        is_during_warmup = (epoch <= args.lr_warmup_epochs - 1) and (
-            warmup_lr_scheduler is not None
         )
 
         for update_step in train_progressbar:
             num_batches = (
                 args.gradient_accum_steps
-                if update_step + 1 < total_updates
+                if update_step + 1 < num_updates_per_epoch
                 else last_iter_num_batches
             )
             batches, num_items_in_batch = utils.get_batch_samples(
@@ -364,10 +371,13 @@ def train_model(args: argparse.Namespace) -> None:
                 log_data['train/loss'] = batch_loss
                 wandb_run.log(log_data, step=global_step)
 
-            if not is_during_warmup:
+            if (epoch <= args.lr_warmup_epochs - 1) and (warmup_lr_scheduler is not None):
+                # still in the warmup phase
+                warmup_lr_scheduler.step()
+            else:
                 if args.scheduler == 'cosine_annealing':
                     main_lr_scheduler.step(
-                        epoch - args.lr_warmup_epochs + update_step / total_updates
+                        epoch - args.lr_warmup_epochs + update_step / num_updates_per_epoch
                     )  # pyright: ignore[reportArgumentType]
                 else:
                     main_lr_scheduler.step()
@@ -413,11 +423,6 @@ def train_model(args: argparse.Namespace) -> None:
             wandb_run=wandb_run,
             wandb_log_step=global_step,
         )
-
-        # scheduler (for warmup)
-        if is_during_warmup:
-            assert warmup_lr_scheduler is not None
-            warmup_lr_scheduler.step()
 
         # saving checkpoint
         checkpoint_path = os.path.join(
