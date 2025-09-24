@@ -194,25 +194,6 @@ def train_model(args: argparse.Namespace) -> None:
     logger.info(f'Using model: {args.model}')
     logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
 
-    optimizer = AdamW(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-    )
-    scheduler_extra_kwargs = {}
-    if args.scheduler == 'one_cycle_lr':
-        scheduler_extra_kwargs = {
-            'epochs': args.num_epochs,
-            'steps_per_epoch': (len(train_data_loader) + args.gradient_accum_steps - 1)
-            // args.gradient_accum_steps,  # ceil_div
-        }
-    scheduler = get_scheduler(
-        optimizer=optimizer,
-        scheduler_name=args.scheduler,
-        args=args,
-        **scheduler_extra_kwargs,
-    )
-
     if args.run_test_only:
         test_results = eval_model(
             model=model,
@@ -250,6 +231,41 @@ def train_model(args: argparse.Namespace) -> None:
             use_warmup=args.model_ema_warmup,
         )
         logger.info('EMA enabled')
+
+    optimizer = AdamW(
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+    )
+    scheduler_extra_kwargs = {}
+    if args.scheduler == 'one_cycle_lr':
+        scheduler_extra_kwargs = {
+            'epochs': args.num_epochs,
+            'steps_per_epoch': (len(train_data_loader) + args.gradient_accum_steps - 1)
+            // args.gradient_accum_steps,  # ceil_div
+        }
+    lr_scheduler = get_scheduler(
+        optimizer=optimizer,
+        scheduler_name=args.scheduler,
+        args=args,
+        **scheduler_extra_kwargs,
+    )
+
+    # learning rate warmup
+    warmup_lr_scheduler = None
+    if args.lr_warmup_epochs > 0:
+        if args.lr_warmup_method == 'linear':
+            warmup_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
+                optimizer, start_factor=args.lr_warmup_decay, total_iters=args.lr_warmup_epochs
+            )
+        elif args.lr_warmup_method == 'constant':
+            warmup_lr_scheduler = torch.optim.lr_scheduler.ConstantLR(
+                optimizer, factor=args.lr_warmup_decay, total_iters=args.lr_warmup_epochs
+            )
+        else:
+            raise RuntimeError(
+                f"Invalid warmup lr method '{args.lr_warmup_method}'. Only `linear` and `constant` are supported."
+            )
 
     global_step = 0
     training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
@@ -341,15 +357,16 @@ def train_model(args: argparse.Namespace) -> None:
             if wandb_run is not None:
                 log_data = {
                     f'learning_rate/group_{group_id}': group_lr
-                    for group_id, group_lr in enumerate(scheduler.get_last_lr())
+                    for group_id, group_lr in enumerate(lr_scheduler.get_last_lr())
                 }
                 log_data['train/loss'] = batch_loss
                 wandb_run.log(log_data, step=global_step)
 
-            if args.scheduler == 'cosine_annealing':
-                scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
-            else:
-                scheduler.step()
+            if epoch > args.warmup_lr_epochs - 1:
+                if args.scheduler == 'cosine_annealing':
+                    lr_scheduler.step(epoch + update_step / total_updates)  # pyright: ignore[reportArgumentType]
+                else:
+                    lr_scheduler.step()
 
             training_loss.update(batch_loss, num_items_in_batch)
             train_progressbar.set_postfix({'loss': f'{batch_loss:0.4f}'})
@@ -392,6 +409,10 @@ def train_model(args: argparse.Namespace) -> None:
             wandb_run=wandb_run,
             wandb_log_step=global_step,
         )
+
+        # scheduler (for warmup)
+        if epoch <= args.warmup_lr_epochs - 1 and warmup_lr_scheduler is not None:
+            warmup_lr_scheduler.step()
 
         # saving checkpoint
         checkpoint_path = os.path.join(
