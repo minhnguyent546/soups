@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 import torchvision
+import torchvision.transforms.v2 as v2
 from torch.utils.data import DataLoader
 
 import soups.utils as utils
@@ -85,10 +86,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
     logger.info(f'Found total {len(model_paths)} unique checkpoints for cooking')
 
     # test dataset and test data loader
-    eval_transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(224, 224)),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(
+    eval_transforms = v2.Compose([
+        v2.Resize(size=(256, 256)),
+        v2.CenterCrop(size=(224, 224)),
+        v2.ToTensor(),
+        v2.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225],
         ),
