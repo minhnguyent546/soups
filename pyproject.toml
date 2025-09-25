@@ -23,10 +23,12 @@ dependencies = [
     "captum>=0.7.0",
     "annoy>=1.17.3",
     "pydantic>=2.11.7",
+    "thop>=0.1.1.post2209072238",
 ]
 
 [dependency-groups]
 dev = [
+    "jupyterlab>=4.4.7",
     "ruff>=0.12.10",
 ]
 
