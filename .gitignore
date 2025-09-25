@@ -24,6 +24,14 @@ _*
 .pytest_cache
 .ruff_cache
 
+# working scripts
+/scripts/*
+!/scripts/filter_high_self_influence_score_samples.py
+!/scripts/split_dataset.py
+!/scripts/soups.sh
+!/scripts/train.sh
+!/scripts/test.sh
+
 # other
 /wandb
 *.bak
