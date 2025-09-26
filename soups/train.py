@@ -196,17 +196,8 @@ def train_model(args: argparse.Namespace) -> None:
             wandb_run=wandb_run,
         )
 
-    macs, num_params = thop.profile(  # pyright: ignore[reportAssignmentType]
-        model,
-        inputs=(
-            torch.randn(
-                1,
-                3,
-                args.train_crop_size,
-                args.train_crop_size,
-            ),
-        ),
-    )
+    _sample_inputs = torch.randn(1, 3, args.train_crop_size, args.train_crop_size).to(device)
+    macs, num_params = thop.profile(model, inputs=(_sample_inputs,))  # pyright: ignore[reportAssignmentType]
     macs, num_params = thop.clever_format([macs, num_params], '%0.2f')
     logger.info(f'Using model: {args.model}')
     logger.info(f'# Params: {num_params} | MACs: {macs}')
