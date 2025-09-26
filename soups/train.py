@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 
 import numpy as np
+import thop
 import torch
 import torch.nn.functional as Fun
 import torchvision
@@ -195,9 +196,20 @@ def train_model(args: argparse.Namespace) -> None:
             wandb_run=wandb_run,
         )
 
-    num_model_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    macs, num_params = thop.profile(  # pyright: ignore[reportAssignmentType]
+        model,
+        inputs=(
+            torch.randn(
+                1,
+                3,
+                args.train_crop_size,
+                args.train_crop_size,
+            ),
+        ),
+    )
+    macs, num_params = thop.clever_format([macs, num_params], '%0.2f')
     logger.info(f'Using model: {args.model}')
-    logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
+    logger.info(f'# Params: {num_params} | MACs: {macs}')
 
     if args.run_test_only:
         test_results = eval_model(
