@@ -333,7 +333,6 @@ def train_model(args: argparse.Namespace) -> None:
         )
 
         train_loss = AverageMeter(name='train_loss', fmt=':0.4f')
-        train_accuracy = AverageMeter(name='train_accuracy', fmt=':0.4f')
 
         for update_step in train_progressbar:
             num_batches = (
@@ -350,8 +349,6 @@ def train_model(args: argparse.Namespace) -> None:
             num_batches = len(batches)  # actual number batches retrieved
 
             batch_loss: float = 0.0
-            num_batch_corrects = 0
-            num_batch_totals = 0
             for images, labels in batches:
                 images = images.to(device)
                 labels = labels.to(device)
@@ -366,10 +363,6 @@ def train_model(args: argparse.Namespace) -> None:
                     )
                     if num_items_in_batch > 0:
                         loss = loss / num_items_in_batch
-
-                predictions = logits.argmax(dim=1)
-                num_batch_corrects += (predictions == labels).sum().item()
-                num_batch_totals += labels.shape[0]
 
                 scaler.scale(loss).backward()
                 batch_loss += loss.detach().item()
@@ -422,7 +415,6 @@ def train_model(args: argparse.Namespace) -> None:
                 )
 
             train_loss.update(batch_loss, num_items_in_batch)
-            train_accuracy.update(num_batch_corrects / num_batch_totals, num_batch_totals)
             train_progressbar.set_postfix({
                 'loss': f'{batch_loss:0.4f}',
                 'grad_norm': f'{grad_norm_value:0.4f}',
@@ -433,7 +425,6 @@ def train_model(args: argparse.Namespace) -> None:
             wandb_run.log(
                 {
                     'train/epoch_loss': train_loss.avg,
-                    'train/epoch_accuracy': train_accuracy.avg,
                     'epoch': epoch + 1,
                 },
                 step=global_step,
