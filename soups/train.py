@@ -406,9 +406,9 @@ def train_model(args: argparse.Namespace) -> None:
                     else 0
                 )
                 logger.info(
-                    f'Train: [{epoch + 1}/{args.num_epochs}][{update_step + 1}/{num_updates_per_epoch}] | '
-                    f'loss: {batch_loss:0.4f} | '
-                    f'grad_norm: {grad_norm_value:0.4f} | '
+                    f'Train: [{epoch + 1}/{args.num_epochs}][{update_step + 1}/{num_updates_per_epoch}]\t'
+                    f'loss: {batch_loss:0.4f}\t'
+                    f'grad_norm: {grad_norm_value:0.4f}\t'
                     f'memory: {memory_used:0.2f} MB'
                 )
             training_loss.update(batch_loss, num_items_in_batch)
