@@ -41,7 +41,7 @@ def train_model(args: argparse.Namespace) -> None:
         else:
             log_file = os.path.join(checkpoint_dir, 'train.log')
 
-    init_logger(level='DEBUG', log_file=log_file, compact=True)
+    logger_init_config = init_logger(level='DEBUG', log_file=log_file, compact=True)
     utils.set_seed(args.seed)
     logger.info(f'Seed: {args.seed}')
     logger.info(f'Args: {args}')
@@ -310,6 +310,8 @@ def train_model(args: argparse.Namespace) -> None:
     if early_stopping.is_enabled():
         logger.info(f'Early stopping enabled with patience {early_stopping.patience}')
 
+    # disable logging to stdout during training to avoid conflict with tqdm
+    logger.remove(logger_init_config['stdout_id'])
     for epoch in range(args.num_epochs):
         model.train()
 
@@ -363,7 +365,7 @@ def train_model(args: argparse.Namespace) -> None:
                 scaler.scale(loss).backward()
                 batch_loss += loss.detach().item()
 
-            grad_norm_value = None
+            grad_norm_value = 0.0
             if args.max_grad_norm > 0:
                 scaler.unscale_(optimizer)
                 grad_norm_value = torch.nn.utils.clip_grad_norm_(
@@ -371,6 +373,7 @@ def train_model(args: argparse.Namespace) -> None:
                     max_norm=args.max_grad_norm,
                     norm_type=2,
                 )
+                grad_norm_value = grad_norm_value.item()
 
             scaler.step(optimizer)
             scaler.update()
@@ -382,6 +385,7 @@ def train_model(args: argparse.Namespace) -> None:
                     for group_id, param_group in enumerate(optimizer.param_groups)
                 }
                 log_data['train/loss'] = batch_loss
+                log_data['train/grad_norm'] = grad_norm_value
                 wandb_run.log(log_data, step=global_step)
 
             if (epoch <= args.lr_warmup_epochs - 1) and (warmup_lr_scheduler is not None):
@@ -401,7 +405,6 @@ def train_model(args: argparse.Namespace) -> None:
                     if device.type == 'cuda'
                     else 0
                 )
-                grad_norm_value = grad_norm_value.item() if grad_norm_value is not None else 0.0
                 logger.info(
                     f'Train: [{epoch + 1}/{args.num_epochs}][{update_step + 1}/{num_updates_per_epoch}] | '
                     f'loss: {batch_loss:0.4f} | '
@@ -409,7 +412,10 @@ def train_model(args: argparse.Namespace) -> None:
                     f'memory: {memory_used:0.2f} MB'
                 )
             training_loss.update(batch_loss, num_items_in_batch)
-            train_progressbar.set_postfix({'loss': f'{batch_loss:0.4f}'})
+            train_progressbar.set_postfix({
+                'loss': f'{batch_loss:0.4f}',
+                'grad_norm': f'{grad_norm_value:0.4f}',
+            })
             global_step += 1
 
         # validation
