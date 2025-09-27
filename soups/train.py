@@ -375,7 +375,12 @@ def train_model(args: argparse.Namespace) -> None:
                     max_norm=args.max_grad_norm,
                     norm_type=2,
                 )
-                grad_norm_value = grad_norm_value.item()
+                if not bool(torch.isinf(grad_norm_value)) and not bool(
+                    torch.isnan(grad_norm_value)
+                ):
+                    grad_norm_value = grad_norm_value.item()
+                else:
+                    grad_norm_value = 0.0
 
             scaler.step(optimizer)
             scaler.update()
