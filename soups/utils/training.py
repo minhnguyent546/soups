@@ -195,13 +195,13 @@ def eval_model(
                 logits = model(images)
                 loss = Fun.cross_entropy(input=logits, target=labels)
 
-            preds = logits.argmax(dim=1)
+            predictions = logits.argmax(dim=1)
 
-            all_preds.extend(preds.detach().cpu().numpy())
+            all_preds.extend(predictions.detach().cpu().numpy())
             all_labels.extend(labels.detach().cpu().numpy())
             eval_loss.update(loss.item(), labels.shape[0])
 
-            num_corrects = (preds == labels).sum().item()
+            num_corrects = (predictions == labels).sum().item()
             cur_accuracy = num_corrects / labels.shape[0]
             eval_accuracy.update(cur_accuracy, labels.shape[0])
 
@@ -380,19 +380,25 @@ def print_eval_results(
     eval_results: EvalResults,
     prefix: str,  # either 'val' or 'test'
     epoch: int | None = None,
+    logger=None,
 ) -> None:
+    print_prefix = ''
     if epoch is None:
-        print(f'{prefix} results: ', end='')
+        print_prefix = f'{prefix} results: '
     else:
-        print(f'{prefix} results on epoch {epoch}: ', end='')
+        print_prefix = f'{prefix} results on epoch {epoch}: '
 
-    print(
+    print_str = (
+        f'{print_prefix}'
         f'{prefix}_loss {eval_results["loss"]:0.4f} | '
         f'{prefix}_acc {eval_results["accuracy"]:0.4f} | '
         f'{prefix}_precision {eval_results["precision"]:0.4f} | '
         f'{prefix}_recall {eval_results["recall"]:0.4f} | '
         f'{prefix}_f1 {eval_results["f1"]:0.4f}'
     )
+    print(print_str)
+    if logger is not None:
+        logger.info(print_str)
 
 
 def select_samples_for_co_teaching(

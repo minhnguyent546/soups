@@ -10,6 +10,7 @@ logger.info('This is an info message')
 """
 
 import sys
+from typing import Any
 
 from loguru import logger
 
@@ -18,7 +19,7 @@ def init_logger(
     level: str = 'DEBUG',
     log_file: str | None = None,
     compact: bool = False,
-) -> None:
+) -> dict[str, Any]:
     if compact:
         fmt = (
             '<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
@@ -34,14 +35,21 @@ def init_logger(
             '<level>{message}</level>'
         )
     logger.remove()
-    logger.add(
+    stdout_id = logger.add(
         sys.stdout,
         format=fmt,
         level=level,
     )
+    log_file_id = None
     if log_file:
-        logger.add(
+        log_file_id = logger.add(
             log_file,
             format=fmt,
             level='DEBUG',
         )
+    return {
+        'stdout_id': stdout_id,
+        'log_file_id': log_file_id,
+        'fmt': fmt,
+        'level': level,
+    }

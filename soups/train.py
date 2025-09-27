@@ -28,17 +28,23 @@ from soups.utils.training import (
 
 
 def train_model(args: argparse.Namespace) -> None:
-    init_logger()
-    utils.set_seed(args.seed)
-    logger.info(f'Seed: {args.seed}')
-
     checkpoint_dir = None
+    log_file = None
     if not args.run_test_only:
         checkpoint_dir = os.path.join(
             args.checkpoints_dir,
             datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
         )
         os.makedirs(checkpoint_dir, exist_ok=True)
+        if args.wandb_logging and args.wandb_name is not None:
+            log_file = os.path.join(checkpoint_dir, f'{args.wandb_name}.log')
+        else:
+            log_file = os.path.join(checkpoint_dir, 'train.log')
+
+    logger_init_config = init_logger(level='DEBUG', log_file=log_file, compact=True)
+    utils.set_seed(args.seed)
+    logger.info(f'Seed: {args.seed}')
+    logger.info(f'Args: {args}')
 
     # training device
     device = utils.get_device(args.device)
@@ -284,8 +290,6 @@ def train_model(args: argparse.Namespace) -> None:
                 f"Invalid warmup lr method '{args.lr_warmup_method}'. Only `linear` and `constant` are supported."
             )
 
-    global_step = 0
-    training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
     optimizer.zero_grad()
     if args.max_grad_norm > 0:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
@@ -304,6 +308,10 @@ def train_model(args: argparse.Namespace) -> None:
     if early_stopping.is_enabled():
         logger.info(f'Early stopping enabled with patience {early_stopping.patience}')
 
+    # disable logging to stdout during training to avoid conflict with tqdm
+    logger.remove(logger_init_config['stdout_id'])
+
+    global_step = 0
     for epoch in range(args.num_epochs):
         model.train()
 
@@ -323,6 +331,8 @@ def train_model(args: argparse.Namespace) -> None:
             range(num_updates_per_epoch),
             desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
         )
+
+        train_loss = AverageMeter(name='train_loss', fmt=':0.4f')
 
         for update_step in train_progressbar:
             num_batches = (
@@ -357,13 +367,20 @@ def train_model(args: argparse.Namespace) -> None:
                 scaler.scale(loss).backward()
                 batch_loss += loss.detach().item()
 
+            grad_norm_value = 0.0
             if args.max_grad_norm > 0:
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(
+                grad_norm_value = torch.nn.utils.clip_grad_norm_(
                     model.parameters(),
                     max_norm=args.max_grad_norm,
                     norm_type=2,
                 )
+                if not bool(torch.isinf(grad_norm_value)) and not bool(
+                    torch.isnan(grad_norm_value)
+                ):
+                    grad_norm_value = grad_norm_value.item()
+                else:
+                    grad_norm_value = 0.0
 
             scaler.step(optimizer)
             scaler.update()
@@ -375,6 +392,7 @@ def train_model(args: argparse.Namespace) -> None:
                     for group_id, param_group in enumerate(optimizer.param_groups)
                 }
                 log_data['train/loss'] = batch_loss
+                log_data['train/grad_norm'] = grad_norm_value
                 wandb_run.log(log_data, step=global_step)
 
             if (epoch <= args.lr_warmup_epochs - 1) and (warmup_lr_scheduler is not None):
@@ -388,9 +406,34 @@ def train_model(args: argparse.Namespace) -> None:
                 else:
                     main_lr_scheduler.step()
 
-            training_loss.update(batch_loss, num_items_in_batch)
-            train_progressbar.set_postfix({'loss': f'{batch_loss:0.4f}'})
+            if (update_step + 1) % args.log_file_interval == 0:
+                memory_used = (
+                    torch.cuda.max_memory_allocated(device) / (1024.0 * 1024.0)
+                    if device.type == 'cuda'
+                    else 0
+                )
+                logger.info(
+                    f'Train: [{epoch + 1}/{args.num_epochs}][{update_step + 1}/{num_updates_per_epoch}]\t'
+                    f'loss: {batch_loss:0.4f}\t'
+                    f'grad_norm: {grad_norm_value:0.4f}\t'
+                    f'memory: {memory_used:0.2f} MB'
+                )
+
+            train_loss.update(batch_loss, num_items_in_batch)
+            train_progressbar.set_postfix({
+                'loss': f'{batch_loss:0.4f}',
+                'grad_norm': f'{grad_norm_value:0.4f}',
+            })
             global_step += 1
+
+        if wandb_run is not None:
+            wandb_run.log(
+                {
+                    'train/epoch_loss': train_loss.avg,
+                    'epoch': epoch + 1,
+                },
+                step=global_step,
+            )
 
         # validation
         val_results = eval_model(
@@ -399,7 +442,7 @@ def train_model(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        print_eval_results(eval_results=val_results, prefix='val', epoch=epoch + 1)
+        print_eval_results(eval_results=val_results, prefix='val', epoch=epoch + 1, logger=logger)
 
         assert len(val_results['per_class_accuracy']) == num_classes
         maybe_log_eval_results(
@@ -418,7 +461,9 @@ def train_model(args: argparse.Namespace) -> None:
             device=device,
             num_classes=num_classes,
         )
-        print_eval_results(eval_results=test_results, prefix='test', epoch=epoch + 1)
+        print_eval_results(
+            eval_results=test_results, prefix='test', epoch=epoch + 1, logger=logger
+        )
 
         assert len(test_results['per_class_accuracy']) == num_classes
         maybe_log_eval_results(
