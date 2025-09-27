@@ -195,13 +195,13 @@ def eval_model(
                 logits = model(images)
                 loss = Fun.cross_entropy(input=logits, target=labels)
 
-            preds = logits.argmax(dim=1)
+            predictions = logits.argmax(dim=1)
 
-            all_preds.extend(preds.detach().cpu().numpy())
+            all_preds.extend(predictions.detach().cpu().numpy())
             all_labels.extend(labels.detach().cpu().numpy())
             eval_loss.update(loss.item(), labels.shape[0])
 
-            num_corrects = (preds == labels).sum().item()
+            num_corrects = (predictions == labels).sum().item()
             cur_accuracy = num_corrects / labels.shape[0]
             eval_accuracy.update(cur_accuracy, labels.shape[0])
 

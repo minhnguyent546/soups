@@ -290,8 +290,6 @@ def train_model(args: argparse.Namespace) -> None:
                 f"Invalid warmup lr method '{args.lr_warmup_method}'. Only `linear` and `constant` are supported."
             )
 
-    global_step = 0
-    training_loss = AverageMeter(name='training_loss', fmt=':0.4f')
     optimizer.zero_grad()
     if args.max_grad_norm > 0:
         logger.info(f'Using gradient clipping with max norm {args.max_grad_norm}')
@@ -312,6 +310,8 @@ def train_model(args: argparse.Namespace) -> None:
 
     # disable logging to stdout during training to avoid conflict with tqdm
     logger.remove(logger_init_config['stdout_id'])
+
+    global_step = 0
     for epoch in range(args.num_epochs):
         model.train()
 
@@ -332,6 +332,9 @@ def train_model(args: argparse.Namespace) -> None:
             desc=f'Training epoch {epoch + 1}/{args.num_epochs}',
         )
 
+        train_loss = AverageMeter(name='train_loss', fmt=':0.4f')
+        train_accuracy = AverageMeter(name='train_accuracy', fmt=':0.4f')
+
         for update_step in train_progressbar:
             num_batches = (
                 args.gradient_accum_steps
@@ -347,6 +350,8 @@ def train_model(args: argparse.Namespace) -> None:
             num_batches = len(batches)  # actual number batches retrieved
 
             batch_loss: float = 0.0
+            num_batch_corrects = 0
+            num_batch_totals = 0
             for images, labels in batches:
                 images = images.to(device)
                 labels = labels.to(device)
@@ -361,6 +366,10 @@ def train_model(args: argparse.Namespace) -> None:
                     )
                     if num_items_in_batch > 0:
                         loss = loss / num_items_in_batch
+
+                predictions = logits.argmax(dim=1)
+                num_batch_corrects += (predictions == labels).sum().item()
+                num_batch_totals += labels.shape[0]
 
                 scaler.scale(loss).backward()
                 batch_loss += loss.detach().item()
@@ -411,12 +420,24 @@ def train_model(args: argparse.Namespace) -> None:
                     f'grad_norm: {grad_norm_value:0.4f}\t'
                     f'memory: {memory_used:0.2f} MB'
                 )
-            training_loss.update(batch_loss, num_items_in_batch)
+
+            train_loss.update(batch_loss, num_items_in_batch)
+            train_accuracy.update(num_batch_corrects / num_batch_totals, num_batch_totals)
             train_progressbar.set_postfix({
                 'loss': f'{batch_loss:0.4f}',
                 'grad_norm': f'{grad_norm_value:0.4f}',
             })
             global_step += 1
+
+        if wandb_run is not None:
+            wandb_run.log(
+                {
+                    'train/epoch_loss': train_loss.avg,
+                    'train/epoch_accuracy': train_accuracy.avg,
+                    'epoch': epoch + 1,
+                },
+                step=global_step,
+            )
 
         # validation
         val_results = eval_model(
