@@ -380,19 +380,25 @@ def print_eval_results(
     eval_results: EvalResults,
     prefix: str,  # either 'val' or 'test'
     epoch: int | None = None,
+    logger=None,
 ) -> None:
+    print_prefix = ''
     if epoch is None:
-        print(f'{prefix} results: ', end='')
+        print_prefix = f'{prefix} results: '
     else:
-        print(f'{prefix} results on epoch {epoch}: ', end='')
+        print_prefix = f'{prefix} results on epoch {epoch}: '
 
-    print(
+    print_str = (
+        f'{print_prefix}'
         f'{prefix}_loss {eval_results["loss"]:0.4f} | '
         f'{prefix}_acc {eval_results["accuracy"]:0.4f} | '
         f'{prefix}_precision {eval_results["precision"]:0.4f} | '
         f'{prefix}_recall {eval_results["recall"]:0.4f} | '
         f'{prefix}_f1 {eval_results["f1"]:0.4f}'
     )
+    print(print_str)
+    if logger is not None:
+        logger.info(print_str)
 
 
 def select_samples_for_co_teaching(

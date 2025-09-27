@@ -275,8 +275,14 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         '--num_workers',
         type=int,
-        default=min(os.cpu_count() or 1, 16),  # too large can cause insufficient shared memory
         help='Number of workers for data loading',
+        default=min(os.cpu_count() or 1, 16),  # too large can cause insufficient shared memory
+    )
+    group.add_argument(
+        '--log_file_interval',
+        type=int,
+        help='Interval (in steps) for logging training progress',
+        default=10,
     )
 
     # mixed precision training
@@ -464,13 +470,12 @@ def _add_wandb_opts(parser: argparse.ArgumentParser) -> None:
         '--wandb_project',
         type=str,
         help='Project name',
-        default='medical-llama2',
+        default='soups',
     )
     group.add_argument(
         '--wandb_name',
         type=str,
         help='Experiment name',
-        default='base',
     )
     group.add_argument(
         '--wandb_resume_id',
