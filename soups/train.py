@@ -216,6 +216,7 @@ def train_model(args: argparse.Namespace) -> None:
             '** Test results **\n'
             f'  Loss: {test_results["loss"]:0.4f}\n'
             f'  Accuracy: {test_results["accuracy"]:0.4f}\n'
+            f'  Accuracy@5: {test_results["accuracy5"]:0.4f}\n'
             f'  Precision: {test_results["precision"]:0.4f}\n'
             f'  Recall: {test_results["recall"]:0.4f}\n'
             f'  F1: {test_results["f1"]:0.4f}\n'

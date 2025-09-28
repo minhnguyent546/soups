@@ -21,6 +21,7 @@ from soups.utils.metric import AverageMeter
 class EvalResults(TypedDict):
     loss: float
     accuracy: float
+    accuracy5: float
     precision: float
     recall: float
     f1: float
@@ -40,6 +41,7 @@ def convert_eval_results_to_dict(
     eval_results_dict: dict[str, Any] = {
         'loss': f'{eval_results["loss"]:{fmt}}',
         'accuracy': f'{eval_results["accuracy"]:{fmt}}',
+        'accuracy@5': f'{eval_results["accuracy5"]:{fmt}}',
         'precision': f'{eval_results["precision"]:{fmt}}',
         'recall': f'{eval_results["recall"]:{fmt}}',
         'f1': f'{eval_results["f1"]:{fmt}}',
@@ -184,6 +186,7 @@ def eval_model(
     eval_iter = tqdm(eval_data_loader, desc='Evaluating model')
     eval_loss = AverageMeter('eval_loss', fmt=':0.4f')
     eval_accuracy = AverageMeter('eval_accuracy', fmt=':0.4f')
+    eval_accuracy5 = AverageMeter('eval_accuracy@5', fmt=':0.4f')
     all_preds = []
     all_labels = []
     with torch.no_grad():
@@ -201,9 +204,9 @@ def eval_model(
             all_labels.extend(labels.detach().cpu().numpy())
             eval_loss.update(loss.item(), labels.shape[0])
 
-            num_corrects = (predictions == labels).sum().item()
-            cur_accuracy = num_corrects / labels.shape[0]
+            cur_accuracy, cur_accuracy5 = accuracy(output=logits, target=labels, topk=(1, 5))
             eval_accuracy.update(cur_accuracy, labels.shape[0])
+            eval_accuracy5.update(cur_accuracy5, labels.shape[0])
 
             eval_iter.set_postfix({
                 'loss': f'{loss:0.4f}',
@@ -242,6 +245,7 @@ def eval_model(
     return {
         'loss': eval_loss.avg,
         'accuracy': eval_accuracy.avg,
+        'accuracy5': eval_accuracy5.avg,
         'precision': float(eval_precision),
         'recall': float(eval_recall),
         'f1': float(eval_f1),
@@ -363,6 +367,7 @@ def maybe_log_eval_results(
     log_data = {
         f'{prefix}/loss': eval_results['loss'],
         f'{prefix}/accuracy': eval_results['accuracy'],
+        f'{prefix}/accuracy@5': eval_results['accuracy5'],
         f'{prefix}/precision': eval_results['precision'],
         f'{prefix}/recall': eval_results['recall'],
         f'{prefix}/f1': eval_results['f1'],
@@ -391,7 +396,8 @@ def print_eval_results(
     print_str = (
         f'{print_prefix}'
         f'{prefix}_loss {eval_results["loss"]:0.4f} | '
-        f'{prefix}_acc {eval_results["accuracy"]:0.4f} | '
+        f'{prefix}_accuracy {eval_results["accuracy"]:0.4f} | '
+        f'{prefix}_accuracy@5 {eval_results["accuracy5"]:0.4f} | '
         f'{prefix}_precision {eval_results["precision"]:0.4f} | '
         f'{prefix}_recall {eval_results["recall"]:0.4f} | '
         f'{prefix}_f1 {eval_results["f1"]:0.4f}'
@@ -418,3 +424,13 @@ def select_samples_for_co_teaching(
     selected_indices_2 = indices_2[:num_remembers]
 
     return selected_indices_1, selected_indices_2
+
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    maxk = min(max(topk), output.size()[1])
+    batch_size = target.size(0)
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.reshape(1, -1).expand_as(pred))
+    return [correct[: min(k, maxk)].reshape(-1).float().sum(0) / batch_size for k in topk]
