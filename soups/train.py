@@ -31,9 +31,13 @@ def train_model(args: argparse.Namespace) -> None:
     checkpoint_dir = None
     log_file = None
     if not args.run_test_only:
+        checkpoints_dir_basename = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        if args.wandb_logging and args.wandb_name is not None:
+            checkpoints_dir_basename += f'-{args.wandb_name}'
+
         checkpoint_dir = os.path.join(
             args.checkpoints_dir,
-            datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
+            checkpoints_dir_basename,
         )
         os.makedirs(checkpoint_dir, exist_ok=True)
         if args.wandb_logging and args.wandb_name is not None:
