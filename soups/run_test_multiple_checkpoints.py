@@ -44,7 +44,8 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     eval_transforms = v2.Compose([
         v2.Resize(size=args.eval_resize_size),
         v2.CenterCrop(size=args.eval_crop_size),
-        v2.ToTensor(),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
         v2.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225],
