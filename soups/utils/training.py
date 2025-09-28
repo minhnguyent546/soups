@@ -426,11 +426,11 @@ def select_samples_for_co_teaching(
     return selected_indices_1, selected_indices_2
 
 
-def accuracy(output, target, topk=(1,)):
+def accuracy(output, target, topk=(1,)) -> list[float]:
     """Computes the accuracy over the k top predictions for the specified values of k"""
     maxk = min(max(topk), output.size()[1])
     batch_size = target.size(0)
     _, pred = output.topk(maxk, 1, True, True)
     pred = pred.t()
     correct = pred.eq(target.reshape(1, -1).expand_as(pred))
-    return [correct[: min(k, maxk)].reshape(-1).float().sum(0) / batch_size for k in topk]
+    return [correct[: min(k, maxk)].reshape(-1).float().sum().item() / batch_size for k in topk]
