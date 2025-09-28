@@ -4,7 +4,6 @@ from contextlib import nullcontext
 from typing import Any, TypedDict
 
 import timm
-import timm.utils as timm_utils
 import torch
 import torch.nn as nn
 import torch.nn.functional as Fun
@@ -205,9 +204,7 @@ def eval_model(
             all_labels.extend(labels.detach().cpu().numpy())
             eval_loss.update(loss.item(), labels.shape[0])
 
-            cur_accuracy, cur_accuracy5 = timm_utils.metrics.accuracy(
-                output=logits, target=labels, topk=(1, 5)
-            )
+            cur_accuracy, cur_accuracy5 = accuracy(output=logits, target=labels, topk=(1, 5))
             eval_accuracy.update(cur_accuracy, labels.shape[0])
             eval_accuracy5.update(cur_accuracy5, labels.shape[0])
 
@@ -427,3 +424,13 @@ def select_samples_for_co_teaching(
     selected_indices_2 = indices_2[:num_remembers]
 
     return selected_indices_1, selected_indices_2
+
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    maxk = min(max(topk), output.size()[1])
+    batch_size = target.size(0)
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.reshape(1, -1).expand_as(pred))
+    return [correct[: min(k, maxk)].reshape(-1).float().sum(0) / batch_size for k in topk]
