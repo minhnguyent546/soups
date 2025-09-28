@@ -1,6 +1,7 @@
 import argparse
 import os
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 
 import numpy as np
 import torch
@@ -317,6 +318,7 @@ def train_model(args: argparse.Namespace) -> None:
     logger.remove(logger_init_config['stdout_id'])
 
     global_step = 0
+    training_start_time = time.perf_counter()
     for epoch in range(args.num_epochs):
         model.train()
 
@@ -509,6 +511,11 @@ def train_model(args: argparse.Namespace) -> None:
                 f'{early_stopping.patience} consecutive epochs.'
             )
             break
+
+    training_end_time = time.perf_counter()
+    total_training_time = training_end_time - training_start_time
+    total_training_time_str = str(timedelta(seconds=int(total_training_time)))
+    logger.info(f'Training time: {total_training_time_str}')
 
 
 def main():
