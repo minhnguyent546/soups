@@ -1,6 +1,7 @@
 import argparse
 import os
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 
 import numpy as np
 import torch
@@ -284,6 +285,7 @@ def train_model(args: argparse.Namespace) -> None:
         metric: [] for metric in args.best_checkpoint_metrics
     }
 
+    training_start_time = time.perf_counter()
     for epoch in range(args.num_epochs):
         model_1.train()
         model_2.train()
@@ -517,6 +519,11 @@ def train_model(args: argparse.Namespace) -> None:
                 checkpoint_dir, f'model_2_epoch_{epoch}_{{metric}}_{{metric_value:.4f}}.pth'
             ),
         )
+
+    training_end_time = time.perf_counter()
+    total_training_time = training_end_time - training_start_time
+    total_training_time_str = str(timedelta(seconds=int(total_training_time)))
+    logger.info(f'Training time: {total_training_time_str}')
 
 
 def main():
