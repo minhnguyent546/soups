@@ -94,49 +94,52 @@ class EarlyStopping:
         return self.enabled
 
 
-def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn.Module:
+def make_model(
+    model_name: str, num_classes: int, pretrained: bool = True, linear_probing: bool = False
+) -> nn.Module:
     model_name = model_name.lower()
     if model_name == 'resnet50':
         model = torchvision.models.resnet50(
             weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None,
         )
         model.fc = nn.Linear(model.fc.in_features, num_classes)
-        model_classifier = model.fc
+        classifier = model.fc
     elif model_name == 'densenet121':
         model = torchvision.models.densenet121(
             weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1 if pretrained else None,
         )
         model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-        model_classifier = model.classifier
+        classifier = model.classifier
     elif model_name.startswith('timm/'):
         model = timm.create_model(
             model_name[len('timm/') :],
             pretrained=pretrained,
             num_classes=num_classes,
         )
-        if hasattr(model, 'head') and isinstance(model.head, nn.Linear):
-            model_classifier = model.head
-        elif (
-            hasattr(model, 'head')
-            and hasattr(model.head, 'fc')
-            and isinstance(model.head.fc, nn.Linear)
-        ):
-            model_classifier = model.head.fc
-        elif (
-            hasattr(model, 'head')
-            and hasattr(model.head, 'fc')
-            and isinstance(model.head.fc, timm.models.metaformer.MlpHead)
-        ):
-            model_classifier = model.head.fc.fc2
-        else:
-            raise ValueError(f'Unable to determine classification head for model {model_name}')
+        classifier_str = model.default_cfg.get('classifier')
+        classifier = None
+        if classifier_str is not None:
+            classifier = get_submodule_from_module_name(model=model, module_path=classifier_str)
+        if classifier is None:
+            logger.warning(
+                'Failed to get classifier from timm model default_cfg, fall back to inferring classifier manually'
+            )
+            classifier = infer_final_fc(model)
+        assert classifier is not None and isinstance(classifier, nn.Linear)
     else:
         raise ValueError(f'Unsupported model: {model_name}')
 
+    if linear_probing:
+        # freeze all layers except the final classifier layer
+        for param in model.parameters():
+            param.requires_grad = False
+        for param in classifier.parameters():
+            param.requires_grad = True
+
     # initializing classification head
-    nn.init.xavier_uniform_(model_classifier.weight)
-    if model_classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
-        nn.init.zeros_(model_classifier.bias)
+    nn.init.xavier_uniform_(classifier.weight)
+    if classifier.bias is not None:  # pyright: ignore[reportUnnecessaryComparison]
+        nn.init.zeros_(classifier.bias)
 
     return model
 
@@ -434,3 +437,17 @@ def accuracy(output, target, topk=(1,)) -> list[float]:
     pred = pred.t()
     correct = pred.eq(target.reshape(1, -1).expand_as(pred))
     return [correct[: min(k, maxk)].reshape(-1).float().sum().item() / batch_size for k in topk]
+
+
+def get_submodule_from_module_name(
+    model: torch.nn.Module, module_path: str
+) -> torch.nn.Module | None:
+    """Get a submodule by dot-separated path, e.g. "head.fc"."""
+    parts = module_path.split('.')
+    sub = model
+    for p in parts:
+        try:
+            sub = getattr(sub, p)
+        except AttributeError:
+            return None
+    return sub

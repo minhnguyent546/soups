@@ -261,6 +261,11 @@ def _add_training_opts(parser: argparse.ArgumentParser) -> None:
         help='Whether to initializing models with random weights instead of initializing with pretrained weights (this option takes no effect when `from_checkpoint` is specified)',
     )
     group.add_argument(
+        '--linear_probing',
+        action='store_true',
+        help='Whether to perform linear probing (only train the final classifier layer)',
+    )
+    group.add_argument(
         '--num_epochs',
         type=int,
         help='Number of training epochs',
