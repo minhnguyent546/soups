@@ -94,7 +94,9 @@ class EarlyStopping:
         return self.enabled
 
 
-def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn.Module:
+def make_model(
+    model_name: str, num_classes: int, pretrained: bool = True, linear_probing: bool = False
+) -> nn.Module:
     model_name = model_name.lower()
     if model_name == 'resnet50':
         model = torchvision.models.resnet50(
@@ -126,6 +128,13 @@ def make_model(model_name: str, num_classes: int, pretrained: bool = True) -> nn
         assert classifier is not None and isinstance(classifier, nn.Linear)
     else:
         raise ValueError(f'Unsupported model: {model_name}')
+
+    if linear_probing:
+        # freeze all layers except the final classifier layer
+        for param in model.parameters():
+            param.requires_grad = False
+        for param in classifier.parameters():
+            param.requires_grad = True
 
     # initializing classification head
     nn.init.xavier_uniform_(classifier.weight)
