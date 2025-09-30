@@ -24,9 +24,13 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     if os.path.isfile(args.output_file):
         logger.error(f'Output file already exists: {args.output_file}')
         exit(1)
+
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    init_logger(compact=True)
+    log_file_path = os.path.join(
+        os.path.dirname(args.output_file), 'test_with_multiple_checkpoints.log'
+    )
+    init_logger(log_file=log_file_path, compact=True)
 
     utils.set_seed(args.seed)
     logger.info(f'Using seed: {args.seed}')
