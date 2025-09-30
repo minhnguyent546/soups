@@ -182,6 +182,8 @@ def train_model(args: argparse.Namespace) -> None:
         linear_probing=args.linear_probing,
     )
     model.to(device)
+    if args.linear_probing:
+        logger.info('Linear probing enabled')
 
     if args.from_checkpoint is not None:
         logger.info(f'Loading model from checkpoint: {args.from_checkpoint}')
