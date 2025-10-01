@@ -57,16 +57,28 @@ def train_model(args: argparse.Namespace) -> None:
 
     # loading dataset
     train_transforms = v2.Compose([
-        v2.RandomResizedCrop(size=args.train_crop_size),
+        v2.RandomResizedCrop(
+            size=args.train_crop_size, interpolation=v2.InterpolationMode.BICUBIC
+        ),
         v2.RandomHorizontalFlip(p=0.5),
+        v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+        v2.RandAugment(
+            num_ops=2,  # Number of augmentation operations to apply
+            magnitude=9,  # Strength of augmentations (0-30, recommend 9-12)
+            interpolation=v2.InterpolationMode.BILINEAR,
+        ),
         v2.ToTensor(),
         v2.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225],
         ),
+        v2.RandomErasing(
+            p=0.25,  # Probability of applying
+            value='random',  # pyright: ignore[reportArgumentType]
+        ),
     ])
     eval_transforms = v2.Compose([
-        v2.Resize(size=args.eval_resize_size),
+        v2.Resize(size=args.eval_resize_size, interpolation=v2.InterpolationMode.BICUBIC),
         v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
@@ -176,6 +188,7 @@ def train_model(args: argparse.Namespace) -> None:
 
     # creating model
     model = make_model(args.model, num_classes=num_classes, pretrained=not args.random_weights)
+    logger.info(f'Model: {model}')
     model.to(device)
 
     if args.from_checkpoint is not None:
