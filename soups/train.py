@@ -58,16 +58,27 @@ def train_model(args: argparse.Namespace) -> None:
 
     # loading dataset
     train_transforms = v2.Compose([
-        v2.RandomResizedCrop(size=args.train_crop_size),
+        v2.RandomResizedCrop(
+            size=args.train_crop_size, interpolation=v2.InterpolationMode.BICUBIC
+        ),
         v2.RandomHorizontalFlip(p=0.5),
+        v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+        v2.RandAugment(
+            num_ops=2,  # Number of augmentation operations to apply
+            magnitude=9,  # Strength of augmentations (0-30, recommend 9-12)
+            interpolation=v2.InterpolationMode.BILINEAR,
+        ),
         v2.ToTensor(),
         v2.Normalize(
             mean=C.IMAGENET_DEFAULT_MEAN,
             std=C.IMAGENET_DEFAULT_STD,
         ),
+        v2.RandomErasing(
+            p=0.2,  # Probability of applying
+        ),
     ])
     eval_transforms = v2.Compose([
-        v2.Resize(size=args.eval_resize_size),
+        v2.Resize(size=args.eval_resize_size, interpolation=v2.InterpolationMode.BICUBIC),
         v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
@@ -182,7 +193,9 @@ def train_model(args: argparse.Namespace) -> None:
         pretrained=not args.random_weights,
         linear_probing=args.linear_probing,
     )
+    logger.info(f'Model: {model}')
     model.to(device)
+
     if args.linear_probing:
         logger.info('Linear probing enabled')
 
