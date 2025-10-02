@@ -9,6 +9,7 @@ import torchvision
 import torchvision.transforms.v2 as v2
 from torch.utils.data import DataLoader
 
+import soups.constants as C
 import soups.utils as utils
 from soups.opts import add_test_multiple_checkpoints_opts
 from soups.utils.logger import init_logger, logger
@@ -46,8 +47,8 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
         v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=C.IMAGENET_DEFAULT_MEAN,
+            std=C.IMAGENET_DEFAULT_STD,
         ),
     ])
     val_dataset = torchvision.datasets.ImageFolder(

@@ -14,6 +14,7 @@ from sklearn.manifold import MDS
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm
 
+import soups.constants as C
 import soups.utils as utils
 import soups.utils.dist as dist_fun
 from soups.opts import add_visualize_with_mds_opts
@@ -73,8 +74,8 @@ def visualize_predictions(args: argparse.Namespace) -> None:
         v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=C.IMAGENET_DEFAULT_MEAN,
+            std=C.IMAGENET_DEFAULT_STD,
         ),
     ])
     eval_dataset = torchvision.datasets.ImageFolder(
