@@ -73,7 +73,7 @@ def train_model(args: argparse.Namespace) -> None:
             std=[0.229, 0.224, 0.225],
         ),
         v2.RandomErasing(
-            p=0.25,  # Probability of applying
+            p=0.2,  # Probability of applying
             value='random',  # pyright: ignore[reportArgumentType]
         ),
     ])
