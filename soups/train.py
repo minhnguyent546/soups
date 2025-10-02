@@ -74,7 +74,6 @@ def train_model(args: argparse.Namespace) -> None:
         ),
         v2.RandomErasing(
             p=0.2,  # Probability of applying
-            value='random',  # pyright: ignore[reportArgumentType]
         ),
     ])
     eval_transforms = v2.Compose([
