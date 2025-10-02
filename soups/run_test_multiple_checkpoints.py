@@ -3,12 +3,15 @@
 import argparse
 import json
 import os
+import time
+from datetime import timedelta
 
 import torch
 import torchvision
 import torchvision.transforms.v2 as v2
 from torch.utils.data import DataLoader
 
+import soups.constants as C
 import soups.utils as utils
 from soups.opts import add_test_multiple_checkpoints_opts
 from soups.utils.logger import init_logger, logger
@@ -22,9 +25,13 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     if os.path.isfile(args.output_file):
         logger.error(f'Output file already exists: {args.output_file}')
         exit(1)
+
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    init_logger(compact=True)
+    log_file_path = os.path.join(
+        os.path.dirname(args.output_file), 'test_with_multiple_checkpoints.log'
+    )
+    init_logger(log_file=log_file_path, compact=True)
 
     utils.set_seed(args.seed)
     logger.info(f'Using seed: {args.seed}')
@@ -46,8 +53,8 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
         v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=C.IMAGENET_DEFAULT_MEAN,
+            std=C.IMAGENET_DEFAULT_STD,
         ),
     ])
     val_dataset = torchvision.datasets.ImageFolder(
@@ -91,6 +98,7 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
     best_val_f1: float = float('-inf')  # best val f1 score
     best_val_f1_checkpoint_path = None  # checkpoint with best val f1
 
+    test_start_time = time.perf_counter()
     for i, checkpoint_path in enumerate(checkpoint_paths):
         checkpoint_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint_dict['model_state_dict'])
@@ -156,6 +164,11 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
         json.dump(test_data, f, indent=4)
 
     logger.info(f'Test results saved to {args.output_file}')
+
+    test_end_time = time.perf_counter()
+    total_test_time = test_end_time - test_start_time
+    total_test_time_str = str(timedelta(seconds=int(total_test_time)))
+    logger.info(f'Cooking time: {total_test_time_str}')
 
 
 def main():

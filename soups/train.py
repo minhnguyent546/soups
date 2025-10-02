@@ -14,6 +14,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, WeightedRandomSampler, default_collate
 from tqdm.autonotebook import tqdm
 
+import soups.constants as C
 import soups.utils as utils
 from soups.opts import add_training_opts
 from soups.utils.logger import init_logger, logger
@@ -69,8 +70,8 @@ def train_model(args: argparse.Namespace) -> None:
         ),
         v2.ToTensor(),
         v2.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=C.IMAGENET_DEFAULT_MEAN,
+            std=C.IMAGENET_DEFAULT_STD,
         ),
         v2.RandomErasing(
             p=0.2,  # Probability of applying
@@ -81,8 +82,8 @@ def train_model(args: argparse.Namespace) -> None:
         v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=C.IMAGENET_DEFAULT_MEAN,
+            std=C.IMAGENET_DEFAULT_STD,
         ),
     ])
     train_dataset = torchvision.datasets.ImageFolder(
@@ -186,9 +187,17 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     # creating model
-    model = make_model(args.model, num_classes=num_classes, pretrained=not args.random_weights)
+    model = make_model(
+        args.model,
+        num_classes=num_classes,
+        pretrained=not args.random_weights,
+        linear_probing=args.linear_probing,
+    )
     logger.info(f'Model: {model}')
     model.to(device)
+
+    if args.linear_probing:
+        logger.info('Linear probing enabled')
 
     if args.from_checkpoint is not None:
         logger.info(f'Loading model from checkpoint: {args.from_checkpoint}')

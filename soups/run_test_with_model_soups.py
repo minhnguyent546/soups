@@ -3,8 +3,10 @@
 import argparse
 import json
 import os
+import time
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 import torch
@@ -12,6 +14,7 @@ import torchvision
 import torchvision.transforms.v2 as v2
 from torch.utils.data import DataLoader
 
+import soups.constants as C
 import soups.utils as utils
 from soups.opts import add_test_with_model_soups_opts
 from soups.utils.logger import init_logger, logger
@@ -91,8 +94,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=C.IMAGENET_DEFAULT_MEAN,
+            std=C.IMAGENET_DEFAULT_STD,
         ),
     ])
     val_dataset = torchvision.datasets.ImageFolder(
@@ -128,6 +131,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
         model_name=args.model,
         num_classes=num_classes,
     ).to(device)
+
+    test_start_time = time.perf_counter()
     for i, model_path in enumerate(model_paths):
         checkpoint = torch.load(model_path, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -474,6 +479,11 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             },
             pruned_soup_model_path,
         )
+
+    test_end_time = time.perf_counter()
+    total_test_time = test_end_time - test_start_time
+    total_test_time_str = str(timedelta(seconds=int(total_test_time)))
+    logger.info(f'Cooking time: {total_test_time_str}')
 
 
 def add_ingredient_to_soup(

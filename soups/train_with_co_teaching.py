@@ -15,6 +15,7 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader, default_collate
 from tqdm.autonotebook import tqdm
 
+import soups.constants as C
 import soups.utils as utils
 from soups.opts import add_training_with_co_teaching_opts
 from soups.utils.logger import init_logger, logger
@@ -52,8 +53,8 @@ def train_model(args: argparse.Namespace) -> None:
         v2.RandomHorizontalFlip(p=0.5),
         v2.ToTensor(),
         v2.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=C.IMAGENET_DEFAULT_MEAN,
+            std=C.IMAGENET_DEFAULT_STD,
         ),
     ])
     eval_transforms = v2.Compose([
@@ -61,8 +62,8 @@ def train_model(args: argparse.Namespace) -> None:
         v2.CenterCrop(size=args.eval_crop_size),
         v2.ToTensor(),
         v2.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
+            mean=C.IMAGENET_DEFAULT_MEAN,
+            std=C.IMAGENET_DEFAULT_STD,
         ),
     ])
     train_dataset = torchvision.datasets.ImageFolder(
