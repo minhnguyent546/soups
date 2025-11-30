@@ -158,4 +158,18 @@ We would like to express our sincere gratitude to the AniAge project for providi
 
 If you find this repository useful for your research, please consider citing:
 
-> Will be updated soon.
+```bibtex
+@article{tran2025leveraging,
+  title        = {Leveraging Model Soups to Classify Intangible Cultural Heritage Images from the Mekong Delta},
+  author       = {Tran, Quoc-Khang and Nguyen, Minh-Thien and Pham, Nguyen-Khang},
+  year         = 2025,
+  journal      = {Journal on Information Technologies & Communications},
+  publisher    = {Ministry of Information and Communications, Vietnam},
+  volume       = 2025,
+  number       = 3,
+  doi          = {10.32913/mic-ict-research.v2025.n3.1395},
+  issn         = {1859-3534},
+  url          = {https://ictmag.ictvietnam.vn/ict/article/view/1395},
+  note         = {Special Issue of The 3rd International Conference on Intelligent Systems and Data Science (ISDS 2025)}
+}
+```
