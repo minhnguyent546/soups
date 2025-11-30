@@ -159,7 +159,7 @@ We would like to express our sincere gratitude to the AniAge project for providi
 If you find this repository useful for your research, please consider citing:
 
 ```bibtex
-@article{ISDS2025_Quoc_Khang_Tran_Minh_Thien_Nguyen,
+@article{tran2025leveraging,
   title        = {Leveraging Model Soups to Classify Intangible Cultural Heritage Images from the Mekong Delta},
   author       = {Tran, Quoc-Khang and Nguyen, Minh-Thien and Pham, Nguyen-Khang},
   year         = 2025,
