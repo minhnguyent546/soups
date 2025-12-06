@@ -3,8 +3,10 @@ import os
 import random
 from typing import Any
 
+import fvcore.nn
 import numpy as np
 import torch
+import torch.nn as nn
 import yaml
 from wandb.sdk.wandb_run import Run as WandbRun
 
@@ -136,3 +138,31 @@ def get_device(device_str: str | None = None) -> torch.device:
         return torch.device(device_str)
     except Exception as e:
         raise ValueError(f'Invalid device specification: {device_str}') from e
+
+
+def to_hms(seconds: float) -> str:
+    """Convert seconds to hours, minutes, seconds format."""
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f'{int(hours)}h {int(minutes)}m {secs:.2f}s'
+
+
+def to_human_readable(num, format='0.2f') -> str:
+    for unit in ['', 'K', 'M', 'G', 'T', 'P']:
+        if abs(num) < 1e3:
+            return f'{num:{format}}{unit}'
+        num /= 1.0e3
+
+    return f'{num:{format}}E'
+
+
+def count_model_params(model: nn.Module, trainable: bool = False) -> int:
+    if trainable:
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    else:
+        return sum(p.numel() for p in model.parameters())
+
+
+def count_model_flops(model: nn.Module, input_size: tuple[int, ...]) -> int:
+    flops = fvcore.nn.FlopCountAnalysis(model, torch.randn(*input_size))
+    return flops.total()

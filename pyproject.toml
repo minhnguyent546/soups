@@ -23,6 +23,7 @@ dependencies = [
     "captum>=0.7.0",
     "annoy>=1.17.3",
     "pydantic>=2.11.7",
+    "fvcore>=0.1.5.post20221221",
 ]
 
 [dependency-groups]

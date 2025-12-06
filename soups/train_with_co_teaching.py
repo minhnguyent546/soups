@@ -1,7 +1,8 @@
 import argparse
+import copy
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -187,9 +188,16 @@ def train_model(args: argparse.Namespace) -> None:
             wandb_run=wandb_run,
         )
 
-    num_model_params = sum(p.numel() for p in model_1.parameters() if p.requires_grad)
+    num_model_params = utils.count_model_params(model_1, trainable=False)
+    model_for_profiling = copy.deepcopy(model_1).cpu().eval()
+    num_model_flops = utils.count_model_flops(
+        model_for_profiling, input_size=(1, 3, args.eval_crop_size, args.eval_crop_size)
+    )
+    del model_for_profiling
     logger.info(f'Using model: {args.model}')
-    logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
+    logger.info(
+        f'num_params: {utils.to_human_readable(num_model_params)} | num_flops: {utils.to_human_readable(num_model_flops)}'
+    )
 
     optimizer_1 = AdamW(
         model_1.parameters(),
@@ -221,12 +229,14 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     if args.run_test_only:
+        test_start_time = time.perf_counter()
         test_results_1 = eval_model(
             model=model_1,
             eval_data_loader=test_data_loader,
             device=device,
             num_classes=num_classes,
         )
+        test_elapsed_time = time.perf_counter() - test_start_time
         print(
             '** Test results **\n'
             f'  Loss: {test_results_1["loss"]:0.4f}\n'
@@ -235,6 +245,7 @@ def train_model(args: argparse.Namespace) -> None:
             f'  Precision: {test_results_1["precision"]:0.4f}\n'
             f'  Recall: {test_results_1["recall"]:0.4f}\n'
             f'  F1: {test_results_1["f1"]:0.4f}\n'
+            f'  Elapsed time: {utils.to_hms(test_elapsed_time)}\n'
         )
         print('  Per class results (acc | pre | recall | f1):')
         for i, class_name in enumerate(class_names):
@@ -521,10 +532,8 @@ def train_model(args: argparse.Namespace) -> None:
             ),
         )
 
-    training_end_time = time.perf_counter()
-    total_training_time = training_end_time - training_start_time
-    total_training_time_str = str(timedelta(seconds=int(total_training_time)))
-    logger.info(f'Training time: {total_training_time_str}')
+    training_elapsed_time = time.perf_counter() - training_start_time
+    logger.info(f'Training time: {utils.to_hms(training_elapsed_time)}')
 
 
 def main():
