@@ -1,4 +1,5 @@
 import argparse
+import copy
 import os
 import time
 from datetime import datetime
@@ -187,9 +188,16 @@ def train_model(args: argparse.Namespace) -> None:
             wandb_run=wandb_run,
         )
 
-    num_model_params = sum(p.numel() for p in model_1.parameters() if p.requires_grad)
+    num_model_params = utils.count_model_params(model_1, trainable=False)
+    model_for_profiling = copy.deepcopy(model_1).cpu().eval()
+    num_model_flops = utils.count_model_flops(
+        model_for_profiling, input_size=(1, 3, args.eval_crop_size, args.eval_crop_size)
+    )
+    del model_for_profiling
     logger.info(f'Using model: {args.model}')
-    logger.info(f'Num_params: {num_model_params / 1e6:.2f}M')
+    logger.info(
+        f'num_params: {utils.to_human_readable(num_model_params)} | num_flops: {utils.to_human_readable(num_model_flops)}'
+    )
 
     optimizer_1 = AdamW(
         model_1.parameters(),
