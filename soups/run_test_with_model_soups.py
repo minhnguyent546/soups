@@ -6,7 +6,6 @@ import os
 import time
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Any
 
 import torch
@@ -480,10 +479,8 @@ def test_with_model_soups(args: argparse.Namespace) -> None:
             pruned_soup_model_path,
         )
 
-    test_end_time = time.perf_counter()
-    total_test_time = test_end_time - test_start_time
-    total_test_time_str = str(timedelta(seconds=int(total_test_time)))
-    logger.info(f'Cooking time: {total_test_time_str}')
+    test_elapsed_time = time.perf_counter() - test_start_time
+    logger.info(f'Cooking time: {utils.to_hms(test_elapsed_time)}')
 
 
 def add_ingredient_to_soup(

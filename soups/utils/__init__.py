@@ -6,6 +6,7 @@ from soups.utils.general import (
     get_device,
     save_metadata_to_checkpoint,
     set_seed,
+    to_hms,
     to_human_readable,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     'get_device',
     'save_metadata_to_checkpoint',
     'set_seed',
+    'to_hms',
     'to_human_readable',
 ]

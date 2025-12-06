@@ -140,6 +140,13 @@ def get_device(device_str: str | None = None) -> torch.device:
         raise ValueError(f'Invalid device specification: {device_str}') from e
 
 
+def to_hms(seconds: float) -> str:
+    """Convert seconds to hours, minutes, seconds format."""
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f'{int(hours)}h {int(minutes)}m {secs:.2f}s'
+
+
 def to_human_readable(num, format='0.2f') -> str:
     for unit in ['', 'K', 'M', 'G', 'T', 'P']:
         if abs(num) < 1e3:

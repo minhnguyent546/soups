@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import time
-from datetime import timedelta
 
 import torch
 import torchvision
@@ -165,10 +164,8 @@ def test_multiple_checkpoints(args: argparse.Namespace) -> None:
 
     logger.info(f'Test results saved to {args.output_file}')
 
-    test_end_time = time.perf_counter()
-    total_test_time = test_end_time - test_start_time
-    total_test_time_str = str(timedelta(seconds=int(total_test_time)))
-    logger.info(f'Cooking time: {total_test_time_str}')
+    test_elapsed_time = time.perf_counter() - test_start_time
+    logger.info(f'Cooking time: {utils.to_hms(test_elapsed_time)}')
 
 
 def main():

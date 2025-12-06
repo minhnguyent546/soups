@@ -2,7 +2,7 @@ import argparse
 import copy
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -240,12 +240,14 @@ def train_model(args: argparse.Namespace) -> None:
     )
 
     if args.run_test_only:
+        test_start_time = time.perf_counter()
         test_results = eval_model(
             model=model,
             eval_data_loader=test_data_loader,
             device=device,
             num_classes=num_classes,
         )
+        test_elapsed_time = time.perf_counter() - test_start_time
         print(
             '** Test results **\n'
             f'  Loss: {test_results["loss"]:0.4f}\n'
@@ -254,6 +256,7 @@ def train_model(args: argparse.Namespace) -> None:
             f'  Precision: {test_results["precision"]:0.4f}\n'
             f'  Recall: {test_results["recall"]:0.4f}\n'
             f'  F1: {test_results["f1"]:0.4f}\n'
+            f'  Elapsed time: {utils.to_hms(test_elapsed_time)}\n'
         )
         print('  Per class results (acc | pre | recall | f1):')
         for i, class_name in enumerate(class_names):
@@ -541,10 +544,8 @@ def train_model(args: argparse.Namespace) -> None:
             )
             break
 
-    training_end_time = time.perf_counter()
-    total_training_time = training_end_time - training_start_time
-    total_training_time_str = str(timedelta(seconds=int(total_training_time)))
-    logger.info(f'Training time: {total_training_time_str}')
+    total_training_time = time.perf_counter() - training_start_time
+    logger.info(f'Training time: {utils.to_hms(total_training_time)}')
 
 
 def main():
