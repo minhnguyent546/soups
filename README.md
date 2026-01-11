@@ -9,6 +9,12 @@
   <a href="https://github.com/minhnguyent546/soups/pulls"><img alt="PRs" src="https://img.shields.io/github/issues-pr/minhnguyent546/soups"></a>
 </p>
 
+**Experiment result on the ICH-17 dataset:**
+
+<p align="center">
+  <img alt="Experiment result" src="./assets/experiment_result_on_ICH_17_dataset.jpg">
+</p>
+
 ---
 
 Table of Contents
