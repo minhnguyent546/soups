@@ -2,7 +2,7 @@
 
 <p>
   <a href="https://ictmag.ictvietnam.vn/ict/article/view/1395"><img alt="Paper" src="https://img.shields.io/badge/paper-PDF-blue.svg"></a>
-  <a href="https://arxiv.org/abs/2603.02181"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2602.22678-b31b1b.svg?style=flat"></a>
+  <a href="https://arxiv.org/abs/2603.02181"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2603.02181-b31b1b.svg?style=flat"></a>
   <a href="https://github.com/minhnguyent546/soups/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/minhnguyent546/soups"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue?logo=python">
 </p>
@@ -43,10 +43,10 @@ The following table summarizes the quantitative results of our experiments on th
 
 ## 2. Qualitative Results
 
-The image below shows the **Multidimensional Scaling (MDS) visualization of model predictions on the validation set**. Each point represents a model projected via MDS using cross-entropy-based pairwise distances. The ingredient models (blue) are broadly distributed, while ensemble models - Greedy (red), Uniform (green), and Soft Voting (orange) - cluster near the center. This spatial structure confirms that *model soups* leverages **predictive diversity more effectively than Soft Voting**. The value above each point represents the *accuracy* on the validation set for the corresponding model
+The image below shows the **Multidimensional Scaling (MDS) visualization of model predictions on the validation set**. Each point represents a model projected via MDS using cross-entropy-based pairwise distances. The ingredient models (blue) are broadly distributed, while ensemble models - Greedy (red), Uniform (green), and Soft Voting (orange) - cluster near the center. This spatial structure confirms that *model soups* leverages **predictive diversity more effectively than Soft Voting**. The value above each point represents the *accuracy* on the validation set for the corresponding model.
 
 <p align="center">
-  <img src="./assets/visualize_mds_coatnet_2_2025-06-27_05-00-50_f1_val.jpg" alt="MDS visualization of model predictions" width="576px">
+  <img src="./assets/mds_visualization_coatnet_2_f1_val.jpg" alt="MDS visualization of model predictions" width="576px">
 </p>
 
 ## 3. Getting Started
