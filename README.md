@@ -43,7 +43,7 @@ The following table summarizes the quantitative results of our experiments on th
 
 ## 2. Qualitative Results
 
-The image below shows the **MDS visualization of model predictions on the validation set**. Each point represents a model projected via MDS using cross-entropy-based pairwise distances. The ingredient models (blue) are broadly distributed, while ensemble models - Greedy (red), Uniform (green), and Soft Voting (orange) - cluster near the center. This spatial structure confirms that *model soups* leverages **predictive diversity more effectively than Soft Voting**. The value above each point represents the *accuracy* on the validation set for the corresponding model
+The image below shows the **Multidimensional Scaling (MDS) visualization of model predictions on the validation set**. Each point represents a model projected via MDS using cross-entropy-based pairwise distances. The ingredient models (blue) are broadly distributed, while ensemble models - Greedy (red), Uniform (green), and Soft Voting (orange) - cluster near the center. This spatial structure confirms that *model soups* leverages **predictive diversity more effectively than Soft Voting**. The value above each point represents the *accuracy* on the validation set for the corresponding model
 
 <p align="center">
   <img src="./assets/visualize_mds_coatnet_2_2025-06-27_05-00-50_f1_val.jpg" alt="MDS visualization of model predictions" width="576px">
