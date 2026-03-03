@@ -1,19 +1,15 @@
 # Leveraging Model Soups to Classify Intangible Cultural Heritage Images from the Mekong Delta
 
-**Abstract:** The classification of Intangible Cultural Heritage (ICH) images in the Mekong Delta poses unique challenges due to limited annotated data, high visual similarity among classes, and domain heterogeneity. In such low-resource settings, conventional deep learning models often suffer from high variance or overfit to spurious correlations, leading to poor generalization. To address these limitations, we propose a robust framework that integrates the hybrid CoAtNet architecture with *model soups*, a lightweight weight-space ensembling technique that averages checkpoints from a single training trajectory - *without increasing inference cost*. CoAtNet captures both local and global patterns through stage-wise fusion of convolution and self-attention. We apply two ensembling strategies - *greedy* and *uniform* soup - to selectively combine diverse checkpoints into a final model. Beyond performance improvements, we analyze the ensembling effect through the lens of bias–variance decomposition. Our findings show that *model soups* reduces variance by stabilizing predictions across diverse model snapshots, while introducing minimal additional bias. Furthermore, using cross-entropy-based distance metrics and Multidimensional Scaling (MDS), we show that *model soups* selects geometrically diverse checkpoints, unlike Soft Voting, which blends redundant models centered in output space. Evaluated on the ICH-17 dataset (7,406 images across 17 classes), our approach achieves **state-of-the-art** results with **72.36**\% top-1 accuracy and **69.28**\% macro F1-score, outperforming strong baselines including ResNet-50, DenseNet-121, and ViT and previous studies on the ICH-17 dataset. These results underscore that diversity-aware checkpoint averaging provides a principled and efficient way to reduce variance and enhance generalization in culturally rich, data-scarce classification tasks.
-
-<p align="center">
+<p>
+  <a href="https://ictmag.ictvietnam.vn/ict/article/view/1395"><img alt="Paper" src="https://img.shields.io/badge/paper-PDF-blue.svg"></a>
+  <a href="https://arxiv.org/abs/2603.02181"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2602.22678-b31b1b.svg?style=flat"></a>
   <a href="https://github.com/minhnguyent546/soups/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/minhnguyent546/soups"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue?logo=python">
-  <a href="https://github.com/minhnguyent546/soups/issues"><img alt="Issues" src="https://img.shields.io/github/issues/minhnguyent546/soups"></a>
-  <a href="https://github.com/minhnguyent546/soups/pulls"><img alt="PRs" src="https://img.shields.io/github/issues-pr/minhnguyent546/soups"></a>
 </p>
 
-**Experiment result on the ICH-17 dataset:**
+---
 
-<p align="center">
-  <img alt="Experiment result" src="./assets/experiment_result_on_ICH_17_dataset.jpg">
-</p>
+**Abstract:** The classification of Intangible Cultural Heritage (ICH) images in the Mekong Delta poses unique challenges due to limited annotated data, high visual similarity among classes, and domain heterogeneity. In such low-resource settings, conventional deep learning models often suffer from high variance or overfit to spurious correlations, leading to poor generalization. To address these limitations, we propose a robust framework that integrates the hybrid CoAtNet architecture with *model soups*, a lightweight weight-space ensembling technique that averages checkpoints from a single training trajectory - *without increasing inference cost*. CoAtNet captures both local and global patterns through stage-wise fusion of convolution and self-attention. We apply two ensembling strategies - *greedy* and *uniform* soup - to selectively combine diverse checkpoints into a final model. Beyond performance improvements, we analyze the ensembling effect through the lens of bias–variance decomposition. Our findings show that *model soups* reduces variance by stabilizing predictions across diverse model snapshots, while introducing minimal additional bias. Furthermore, using cross-entropy-based distance metrics and Multidimensional Scaling (MDS), we show that *model soups* selects geometrically diverse checkpoints, unlike Soft Voting, which blends redundant models centered in output space. Evaluated on the ICH-17 dataset (7,406 images across 17 classes), our approach achieves **state-of-the-art** results with **72.36**\% top-1 accuracy and **69.28**\% macro F1-score, outperforming strong baselines including ResNet-50, DenseNet-121, and ViT and previous studies on the ICH-17 dataset. These results underscore that diversity-aware checkpoint averaging provides a principled and efficient way to reduce variance and enhance generalization in culturally rich, data-scarce classification tasks.
 
 ---
 
@@ -22,26 +18,47 @@ Table of Contents
 
 - [Leveraging Model Soups to Classify Intangible Cultural Heritage Images from the Mekong Delta](#leveraging-model-soups-to-classify-intangible-cultural-heritage-images-from-the-mekong-delta)
 - [Table of Contents](#table-of-contents)
-  - [1. Installation](#1-installation)
-    - [Prerequisites](#prerequisites)
-    - [Setup](#setup)
-  - [2. Datasets](#2-datasets)
-    - [Dataset structure](#dataset-structure)
-  - [3. Training](#3-training)
-  - [4. Inference](#4-inference)
-  - [5. Acknowledgment](#5-acknowledgment)
-  - [6. Citing](#6-citing)
+  - [1. Quantitative Results](#1-quantitative-results)
+  - [2. Qualitative Results](#2-qualitative-results)
+  - [3. Getting Started](#3-getting-started)
+    - [3.1 Installation](#31-installation)
+      - [Prerequisites](#prerequisites)
+      - [Setup](#setup)
+    - [3.2 Datasets](#32-datasets)
+      - [Dataset structure](#dataset-structure)
+    - [3.3 Training](#33-training)
+    - [3.4 Inference](#34-inference)
+  - [4. Acknowledgment](#4-acknowledgment)
+  - [5. Citing](#5-citing)
 
 <!-- Created by https://github.com/ekalinin/github-markdown-toc -->
 
-## 1. Installation
+## 1. Quantitative Results
 
-### Prerequisites
+The following table summarizes the quantitative results of our experiments on the *ICH-17 dataset*, comparing the proposed *model soups* approach with various baselines and previous studies. The metrics reported include *accuracy* and *macro F1-score* on the validation set.
+
+<p align="center">
+  <img alt="Experiment result" src="./assets/experiment_result_on_ICH_17_dataset.jpg">
+</p>
+
+## 2. Qualitative Results
+
+The image below shows the **MDS visualization of model predictions on the validation set**. Each point represents a model projected via MDS using cross-entropy-based pairwise distances. The ingredient models (blue) are broadly distributed, while ensemble models - Greedy (red), Uniform (green), and Soft Voting (orange) - cluster near the center. This spatial structure confirms that *model soups* leverages **predictive diversity more effectively than Soft Voting**. The value above each point represents the *accuracy* on the validation set for the corresponding model
+
+<p align="center">
+  <img src="./assets/visualize_mds_coatnet_2_2025-06-27_05-00-50_f1_val.jpg" alt="Visual Interpretability of Retrieval" width="576px">
+</p>
+
+## 3. Getting Started
+
+### 3.1 Installation
+
+#### Prerequisites
 
 - Python 3.10+
 - [uv](https://github.com/astral-sh/uv) - A Package and Project manager for Python
 
-### Setup
+#### Setup
 
 1. **Clone the repository:**
    ```bash
@@ -66,11 +83,11 @@ Table of Contents
    python -m soups.train --help
    ```
 
-## 2. Datasets
+### 3.2 Datasets
 
 > The dataset used in this study is not publicly available due to institutional or licensing restrictions. However, it can be made available for academic use upon reasonable request. Interested researchers may contact the authors for further information.
 
-### Dataset structure
+#### Dataset structure
 
 ```
 dataset_name
@@ -91,7 +108,7 @@ dataset_name
 │   │   ├── ...
 ```
 
-## 3. Training
+### 3.3 Training
 
 To train the model, you can run the following command:
 ```bash
@@ -120,7 +137,7 @@ python -m soups.train \
   --wandb_name example_expr
 ```
 
-## 4. Inference
+### 3.4 Inference
 
 To run inference on a trained model, you can use the following command:
 ```bash
@@ -156,11 +173,11 @@ python -m soups.run_test_with_model_soups \
 
 ```
 
-## 5. Acknowledgment
+## 4. Acknowledgment
 
 We would like to express our sincere gratitude to the AniAge project for providing the ICH dataset used in our experiments. This valuable resource enabled a fair and rigorous evaluation of the proposed methods in a culturally grounded context.
 
-## 6. Citing
+## 5. Citing
 
 If you find this repository useful for your research, please consider citing:
 
